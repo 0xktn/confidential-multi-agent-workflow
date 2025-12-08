@@ -97,6 +97,12 @@ aws iam put-role-policy \
     --policy-document file:///tmp/kms-policy.json
 log_info "Attached KMS policy"
 
+# Attach SSM policy for remote state sync
+aws iam attach-role-policy \
+    --role-name "$ROLE_NAME" \
+    --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore 2>/dev/null || log_warn "SSM policy already attached"
+log_info "Attached SSM policy"
+
 # Create instance profile
 if aws iam get-instance-profile --instance-profile-name EnclaveInstanceProfile &> /dev/null; then
     log_warn "Instance profile exists"

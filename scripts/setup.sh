@@ -42,6 +42,7 @@ DEFAULT_VOLUME_SIZE="30"
 
 DRY_RUN=false
 SHOW_STATUS=false
+SHOW_REMOTE_STATUS=false
 RESET_STATE=false
 
 # Parse arguments
@@ -56,6 +57,7 @@ Options:
     -r, --region REGION     AWS region (default: $DEFAULT_REGION)
     -t, --type TYPE         EC2 instance type (default: $DEFAULT_INSTANCE_TYPE)
     --status                Show current setup status
+    --remote-status         Show status including remote EC2 state
     --reset                 Reset all state and start fresh
     --dry-run               Preview without executing
 
@@ -73,6 +75,7 @@ while [[ $# -gt 0 ]]; do
         -r|--region) state_set "aws_region" "$2"; shift 2 ;;
         -t|--type) state_set "instance_type" "$2"; shift 2 ;;
         --status) SHOW_STATUS=true; shift ;;
+        --remote-status) SHOW_REMOTE_STATUS=true; shift ;;
         --reset) RESET_STATE=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
         *) log_error "Unknown option: $1"; show_help; exit 1 ;;
@@ -93,6 +96,13 @@ fi
 # Handle --status
 if [[ "$SHOW_STATUS" == "true" ]]; then
     state_status
+    exit 0
+fi
+
+# Handle --remote-status
+if [[ "$SHOW_REMOTE_STATUS" == "true" ]]; then
+    state_status
+    "$SCRIPT_DIR/remote-status.sh"
     exit 0
 fi
 
@@ -127,6 +137,11 @@ echo "Step Status:"
 state_check "infra" && echo "  ✓ Infrastructure (completed)" || echo "  ○ Infrastructure (pending)"
 state_check "kms" && echo "  ✓ KMS Configuration (completed)" || echo "  ○ KMS Configuration (pending)"
 state_check "temporal" && echo "  ✓ Temporal Server (completed)" || echo "  ○ Temporal Server (pending)"
+state_check "instance_setup" && echo "  ✓ Instance Setup (completed)" || echo "  ○ Instance Setup (pending)"
+state_check "enclave_built" && echo "  ✓ Enclave Built (completed)" || echo "  ○ Enclave Built (pending)"
+state_check "kms_policy" && echo "  ✓ KMS Policy (completed)" || echo "  ○ KMS Policy (pending)"
+state_check "enclave_running" && echo "  ✓ Enclave Running (completed)" || echo "  ○ Enclave Running (pending)"
+state_check "worker_running" && echo "  ✓ Worker Running (completed)" || echo "  ○ Worker Running (pending)"
 echo ""
 
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -135,8 +150,8 @@ if [[ "$DRY_RUN" == "true" ]]; then
 fi
 
 # Check if all done
-if state_check "infra" && state_check "kms" && state_check "temporal"; then
-    log_info "All steps already completed! Use --reset to start over."
+if state_check "infra" && state_check "kms" && state_check "temporal" && state_check "instance_setup" && state_check "enclave_built" && state_check "kms_policy" && state_check "enclave_running" && state_check "worker_running"; then
+    log_info "All 8 steps already completed! Use --reset to start over."
     exit 0
 fi
 
@@ -231,32 +246,110 @@ else
     log_step "Step 3: Temporal (Already Complete)"
 fi
 
+# Step 4: Instance Setup via SSM
+if ! state_check "instance_setup"; then
+    log_step "Step 4: Setting up EC2 Instance via SSM"
+    state_start "instance_setup"
+    
+    if "$SCRIPT_DIR/run-instance-setup.sh"; then
+        state_complete "instance_setup"
+    else
+        state_fail "instance_setup"
+        log_error "Instance setup failed"
+        exit 1
+    fi
+else
+    log_step "Step 4: Instance Setup (Already Complete)"
+fi
+
+# Step 5: Build Enclave via SSM
+if ! state_check "enclave_built"; then
+    log_step "Step 5: Building Enclave via SSM"
+    state_start "enclave_built"
+    
+    if "$SCRIPT_DIR/run-enclave-build.sh"; then
+        state_complete "enclave_built"
+    else
+        state_fail "enclave_built"
+        log_error "Enclave build failed"
+        exit 1
+    fi
+else
+    log_step "Step 5: Enclave Build (Already Complete)"
+fi
+
+# Step 6: Apply KMS Attestation Policy
+if ! state_check "kms_policy"; then
+    log_step "Step 6: Applying KMS Attestation Policy"
+    
+    PCR0=$(state_get "pcr0" 2>/dev/null || echo "")
+    if [[ -z "$PCR0" ]]; then
+        log_error "PCR0 not found in state. Enclave may not have built correctly."
+        exit 1
+    fi
+    
+    if "$SCRIPT_DIR/setup-kms-policy.sh" "$PCR0"; then
+        state_complete "kms_policy"
+    else
+        log_error "KMS policy setup failed"
+        exit 1
+    fi
+else
+    log_step "Step 6: KMS Policy (Already Complete)"
+fi
+
+# Step 7: Run Enclave via SSM
+if ! state_check "enclave_running"; then
+    log_step "Step 7: Starting Enclave via SSM"
+    state_start "enclave_running"
+    
+    if "$SCRIPT_DIR/run-enclave-ssm.sh"; then
+        state_complete "enclave_running"
+    else
+        state_fail "enclave_running"
+        log_error "Enclave start failed"
+        exit 1
+    fi
+else
+    log_step "Step 7: Enclave Running (Already Complete)"
+fi
+
+# Step 8: Start Host Worker via SSM
+if ! state_check "worker_running"; then
+    log_step "Step 8: Starting Host Worker via SSM"
+    state_start "worker_running"
+    
+    if "$SCRIPT_DIR/run-worker-ssm.sh"; then
+        state_complete "worker_running"
+    else
+        state_fail "worker_running"
+        log_error "Worker start failed"
+        exit 1
+    fi
+else
+    log_step "Step 8: Worker Running (Already Complete)"
+fi
+
 # Summary
 log_step "Setup Complete!"
 
 INSTANCE_IP=$(state_get "instance_ip" 2>/dev/null || echo "N/A")
+PCR0=$(state_get "pcr0" 2>/dev/null || echo "N/A")
+ENCLAVE_ID=$(state_get "enclave_id" 2>/dev/null || echo "N/A")
 
 echo ""
 echo "┌─────────────────────────────────────────────┐"
-echo "│              Next Steps                     │"
+echo "│     All 8 Steps Completed!                 │"
 echo "└─────────────────────────────────────────────┘"
 echo ""
-echo "1. SSH into your instance:"
-echo "   ssh -i ~/.ssh/${KEY_NAME}.pem ec2-user@${INSTANCE_IP}"
+echo "Instance:   $INSTANCE_IP"
+echo "PCR0:       ${PCR0:0:32}..."
+echo "Enclave:    ${ENCLAVE_ID}"
 echo ""
-echo "2. Clone the repo on the EC2:"
-echo "   git clone https://github.com/0xktn/confidential-multi-agent-workflow.git"
-echo "   cd confidential-multi-agent-workflow"
+echo "Your confidential workflow is running!"
 echo ""
-echo "3. Run instance setup:"
-echo "   ./scripts/setup-instance.sh"
-echo ""
-echo "4. Build the enclave:"
-echo "   ./scripts/build-enclave.sh"
-echo ""
-echo "5. Apply KMS policy with PCR0:"
-echo "   ./scripts/setup-kms-policy.sh <PCR0_VALUE>"
-echo ""
-echo "6. View current state anytime:"
-echo "   ./scripts/setup.sh --status"
+echo "Next:"
+echo "  - View status:  ./scripts/setup.sh --remote-status"
+echo "  - SSH in:       ssh -i ~/.ssh/${KEY_NAME}.pem ec2-user@${INSTANCE_IP}"
+echo "  - View logs:    cat /tmp/enclave.log  |  cat /tmp/worker.log"
 echo ""
