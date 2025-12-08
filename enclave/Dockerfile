@@ -5,5 +5,5 @@ WORKDIR /app
 # Install simple dependencies just for test
 # RUN pip install cryptography boto3
 
-# Inline command to avoid file path issues
-CMD ["python3", "-u", "-c", "import sys; import time; print('HELLO ALPINE ENCLAVE'); print(sys.version); time.sleep(3600)"]
+# Pure shell loop to test if init works at all
+CMD ["/bin/sh", "-c", "echo 'SHELL STARTING'; while true; do echo 'Alive'; sleep 5; done"]
