@@ -240,7 +240,7 @@ if [[ -n "$INSTANCE_ID" ]]; then
         aws ec2 associate-iam-instance-profile \
             --region "$AWS_REGION" \
             --instance-id "$INSTANCE_ID" \
-            --iam-instance-profile Name="$PROFILE_NAME" 2>/dev/null || log_warn "Profile may already be attached"
+            --iam-instance-profile Name="$PROFILE_NAME" &>/dev/null || true
         
         # Restart instance to force SSM agent to pick up new credentials
         log_info "Restarting instance to load credentials..."
