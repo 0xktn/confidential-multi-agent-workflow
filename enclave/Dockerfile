@@ -1,9 +1,17 @@
-FROM python:3.11-alpine
+FROM amazonlinux:2023
 
 WORKDIR /app
 
-# Install simple dependencies just for test
-# RUN pip install cryptography boto3
+# Install Python 3.11
+RUN dnf install -y python3.11 python3.11-pip && dnf clean all
 
-# Explicitly redirect to console device to ensure logs are visible
-CMD ["/bin/sh", "-c", "exec >/dev/console 2>&1; echo 'REDIRECTED CONSOLE START'; python3 -u /app/app.py"]
+# Install dependencies (none needed for vsock test, but keeping structure)
+# RUN pip3.11 install cryptography boto3
+
+# Copy application
+COPY app.py .
+COPY run.sh .
+RUN chmod +x run.sh
+
+# Entrypoint
+CMD ["/app/run.sh"]
