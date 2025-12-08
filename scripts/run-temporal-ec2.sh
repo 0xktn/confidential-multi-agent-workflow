@@ -134,18 +134,41 @@ while true; do
 done
 echo ""
 
-# Create namespace
+# Create namespace (with retry since Temporal takes time to fully start)
 log_info "Creating namespace: $NAMESPACE"
 
-NAMESPACE_CMD=$(aws ssm send-command \
-    --region "$AWS_REGION" \
-    --instance-ids "$INSTANCE_ID" \
-    --document-name "AWS-RunShellScript" \
-    --parameters 'commands=["docker exec temporal tctl --namespace '"$NAMESPACE"' namespace register 2>&1 || echo Namespace already exists"]' \
-    --query 'Command.CommandId' \
-    --output text 2>/dev/null || echo "")
-
-sleep 10
+for i in {1..6}; do
+    log_info "Attempting namespace creation (attempt $i/6)..."
+    
+    NAMESPACE_RESULT=$(aws ssm send-command \
+        --region "$AWS_REGION" \
+        --instance-ids "$INSTANCE_ID" \
+        --document-name "AWS-RunShellScript" \
+        --parameters 'commands=["docker exec temporal tctl --namespace '"$NAMESPACE"' namespace register 2>&1"]' \
+        --query 'Command.CommandId' \
+        --output text 2>/dev/null)
+    
+    sleep 15
+    
+    # Check if creation succeeded
+    RESULT=$(aws ssm get-command-invocation \
+        --region "$AWS_REGION" \
+        --command-id "$NAMESPACE_RESULT" \
+        --instance-id "$INSTANCE_ID" \
+        --query 'StandardOutputContent' \
+        --output text 2>/dev/null || echo "")
+    
+    if echo "$RESULT" | grep -q "Namespace.*registered"; then
+        log_info "Namespace created successfully!"
+        break
+    elif echo "$RESULT" | grep -q "already exists"; then
+        log_info "Namespace already exists"
+        break
+    else
+        log_warn "Temporal not ready yet, waiting..."
+        sleep 15
+    fi
+done
 
 state_set "temporal_host" "localhost:7233"
 state_set "temporal_namespace" "$NAMESPACE"
