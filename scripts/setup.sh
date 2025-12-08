@@ -241,8 +241,14 @@ if [[ -n "$INSTANCE_ID" ]]; then
             --region "$AWS_REGION" \
             --instance-id "$INSTANCE_ID" \
             --iam-instance-profile Name="$PROFILE_NAME" 2>/dev/null || log_warn "Profile may already be attached"
-        log_info "Waiting for profile to propagate (30s)..."
-        sleep 30
+        
+        # Restart instance to force SSM agent to pick up new credentials
+        log_info "Restarting instance to load credentials..."
+        aws ec2 stop-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" >/dev/null
+        aws ec2 wait instance-stopped --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
+        aws ec2 start-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" >/dev/null
+        aws ec2 wait instance-running --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
+        log_info "Instance restarted with profile"
     fi
 fi
 
