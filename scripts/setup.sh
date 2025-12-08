@@ -228,6 +228,8 @@ fi
 # Attach instance profile to EC2 (required for SSM)
 INSTANCE_ID=$(state_get "instance_id" 2>/dev/null || echo "")
 PROFILE_NAME="EnclaveInstanceProfile"
+PROFILE_ATTACHED=false
+
 if [[ -n "$INSTANCE_ID" ]]; then
     CURRENT_PROFILE=$(aws ec2 describe-iam-instance-profile-associations \
         --region "$AWS_REGION" \
@@ -241,9 +243,14 @@ if [[ -n "$INSTANCE_ID" ]]; then
             --region "$AWS_REGION" \
             --instance-id "$INSTANCE_ID" \
             --iam-instance-profile Name="$PROFILE_NAME" &>/dev/null || true
-        
-        # Restart instance to force SSM agent to pick up new credentials
-        log_info "Restarting instance to load credentials..."
+        PROFILE_ATTACHED=true
+    else
+        log_info "Instance profile already attached, skipping restart"
+    fi
+    
+    # Only restart if we just attached the profile
+    if [[ "$PROFILE_ATTACHED" == "true" ]]; then
+        log_info "Restarting instance to load credentials (one-time, ~3 min)..."
         aws ec2 stop-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" >/dev/null
         aws ec2 wait instance-stopped --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
         aws ec2 start-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" >/dev/null

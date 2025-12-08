@@ -19,16 +19,17 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 INSTANCE_ID=$(state_get "instance_id" 2>/dev/null || echo "")
 AWS_REGION=$(state_get "aws_region" 2>/dev/null || echo "ap-southeast-1")
-MAX_WAIT=${1:-300}  # Default 5 minutes
+MAX_WAIT=600  # 10 minutes (instance restart + boot + SSM agent)
 
 if [[ -z "$INSTANCE_ID" ]]; then
-    log_error "No instance ID found. Run setup first."
+    log_error "No instance ID found"
     exit 1
 fi
 
 # Wait for SSM to be online
 log_info "Waiting for SSM agent to come online (max ${MAX_WAIT}s)..."
 WAITED=0
+LAST_MSG=0
 while [[ $WAITED -lt $MAX_WAIT ]]; do
     SSM_STATUS=$(aws ssm describe-instance-information \
         --region "$AWS_REGION" \
@@ -39,6 +40,12 @@ while [[ $WAITED -lt $MAX_WAIT ]]; do
     if [[ "$SSM_STATUS" == "Online" ]]; then
         log_info "SSM agent online!"
         break
+    fi
+    
+    # Progress message every 60 seconds
+    if [[ $((WAITED - LAST_MSG)) -ge 60 ]]; then
+        log_info "Still waiting... (${WAITED}s elapsed)"
+        LAST_MSG=$WAITED
     fi
     
     echo -n "."
