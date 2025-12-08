@@ -21,4 +21,4 @@ COPY . .
 ENV PYTHONPATH=/app/deps
 
 # Enclave entry point
-CMD ["python", "app.py"]
+CMD ["python", "-u", "app.py"]
