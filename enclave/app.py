@@ -9,11 +9,14 @@ import os
 print("[ENCLAVE] Python Process Started (PID {})".format(os.getpid()), flush=True)
 
 # Lazy/Safe imports
+IMPORT_ERROR_TRACE = None
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     print("[ENCLAVE] Cryptography imported", flush=True)
-except ImportError as e:
-    print(f"[ERROR] Cryptography import failed: {e}", flush=True)
+except Exception as e:
+    import traceback
+    IMPORT_ERROR_TRACE = f"{e}\n{traceback.format_exc()}"
+    print(f"[ERROR] Cryptography import failed: {IMPORT_ERROR_TRACE}", flush=True)
     AESGCM = None
 
 try:
@@ -67,7 +70,7 @@ class KMSAttestationClient:
 class EncryptionService:
     def __init__(self, key: bytes):
         if not AESGCM:
-            raise ImportError("Cryptography module missing")
+            raise ImportError(f"Cryptography module missing. Trace: {IMPORT_ERROR_TRACE}")
             
         if len(key) != 32:
             # Pad or truncate for stub stability if fallback key is wrong size
