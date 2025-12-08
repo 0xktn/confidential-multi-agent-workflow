@@ -1,0 +1,21 @@
+// Protocol Buffer Definitions for State Serialization
+// See docs/04-enclave-development.md for usage details
+
+syntax = "proto3";
+
+package confidential;
+
+// State message exchanged between agents
+message AgentState {
+  string agent_id = 1;
+  int32 iteration = 2;
+  bytes data = 3;
+  int64 timestamp = 4;
+}
+
+// Encrypted container for state
+message EncryptedState {
+  bytes ciphertext = 1;
+  bytes nonce = 2;
+  bytes tag = 3;
+}
