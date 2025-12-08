@@ -70,7 +70,7 @@ def configure_enclave():
         
         sock.close()
         
-        if result.get('status') == 'configured':
+        if result.get('status') == 'ok':
             logger.info("Enclave configured successfully")
             _enclave_configured = True
         else:
@@ -103,7 +103,7 @@ async def process_in_enclave(request_data: str) -> str:
         # Send processing request
         request = {
             'type': 'process',
-            'data': request_data
+            'payload': request_data
         }
         sock.sendall(json.dumps(request).encode())
         
