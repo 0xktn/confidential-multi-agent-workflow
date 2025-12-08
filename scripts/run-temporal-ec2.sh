@@ -148,30 +148,22 @@ echo ""
 log_info "Waiting for Temporal to be healthy..."
 echo ""
 
-WAIT_CMD='
-i=0
-while [ $i -lt 60 ]; do
-    STATUS=$(docker inspect temporal --format="{{.State.Health.Status}}" 2>/dev/null || echo "starting")
-    if [ "$STATUS" = "healthy" ]; then
-        echo "Temporal is healthy!"
-        exit 0
-    fi
-    echo "Attempt $i: $STATUS"
-    sleep 5
-    i=$((i+1))
-done
-echo "Timeout waiting for Temporal health check"
-exit 1
-'
-
+# Simple inline health check loop
 HEALTH_CHECK=$(aws ssm send-command \
     --region "$AWS_REGION" \
     --instance-ids "$INSTANCE_ID" \
     --document-name "AWS-RunShellScript" \
     --timeout-seconds 600 \
-    --parameters "commands=[\"$WAIT_CMD\"]" \
+    --parameters 'commands=["for i in $(seq 1 60); do STATUS=$(docker inspect temporal --format={{.State.Health.Status}} 2>/dev/null || echo starting); echo Attempt $i: $STATUS; [ \"$STATUS\" = \"healthy\" ] && echo OK && exit 0; sleep 5; done; echo TIMEOUT; exit 1"]' \
     --query 'Command.CommandId' \
     --output text 2>/dev/null)
+
+if [[ -z "$HEALTH_CHECK" ]]; then
+    log_error "Failed to send health check command"
+    exit 1
+fi
+
+log_info "Health check command: $HEALTH_CHECK"
 
 # Wait for health check to complete
 while true; do
@@ -188,7 +180,15 @@ while true; do
             break
             ;;
         "Failed"|"Cancelled"|"TimedOut")
+            # Get the actual error
+            ERROR=$(aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$HEALTH_CHECK" \
+                --instance-id "$INSTANCE_ID" \
+                --query 'StandardErrorContent' \
+                --output text 2>/dev/null)
             log_error "Health check failed: $STATUS"
+            log_error "Error: $ERROR"
             exit 1
             ;;
         *)
