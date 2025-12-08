@@ -85,9 +85,7 @@ networks:
 COMPOSE",
     "mkdir -p dynamicconfig",
     "echo \"{}\" > dynamicconfig/development-sql.yaml",
-    "docker compose up -d 2>&1",
-    "sleep 30",
-    "docker ps | grep temporal"
+    "docker compose up -d 2>&1"
 ]'
 
 COMMAND_ID=$(aws ssm send-command \
@@ -100,7 +98,7 @@ COMMAND_ID=$(aws ssm send-command \
     --output text)
 
 log_info "Command sent: $COMMAND_ID"
-log_info "Starting Temporal (this takes 1-2 minutes)..."
+log_info "Starting docker containers and waiting for Temporal to be ready (2-3 min)..."
 
 # Wait for command
 while true; do
