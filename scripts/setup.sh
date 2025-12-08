@@ -250,12 +250,23 @@ if [[ -n "$INSTANCE_ID" ]]; then
     
     # Only restart if we just attached the profile
     if [[ "$PROFILE_ATTACHED" == "true" ]]; then
-        log_info "Restarting instance to load credentials (one-time, ~3 min)..."
-        aws ec2 stop-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" >/dev/null
-        aws ec2 wait instance-stopped --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
-        aws ec2 start-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" >/dev/null
-        aws ec2 wait instance-running --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
-        log_info "Instance restarted with profile"
+        log_info "Restarting SSM agent to load credentials (~30s)..."
+        
+        # Restart SSM agent via SSH (much faster than full instance restart)
+        INSTANCE_IP=$(state_get "instance_ip" 2>/dev/null)
+        KEY_PATH="$HOME/.ssh/$(state_get "key_name" 2>/dev/null || echo "nitro-enclave-key").pem"
+        
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$KEY_PATH" ec2-user@"$INSTANCE_IP" \
+            "sudo systemctl restart amazon-ssm-agent" 2>/dev/null || {
+            log_warn "SSH restart failed, doing full instance restart (~3 min)..."
+            aws ec2 stop-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" >/dev/null
+            aws ec2 wait instance-stopped --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
+            aws ec2 start-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" >/dev/null
+            aws ec2 wait instance-running --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
+        }
+        
+        log_info "Waiting for SSM agent to reconnect..."
+        sleep 30
     fi
 fi
 
