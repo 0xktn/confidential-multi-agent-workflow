@@ -1,0 +1,23 @@
+{
+    "name": "confidential-multi-agent-workflow",
+    "version": "1.0.0",
+    "description": "Secure State Transfer Protocol for distributed agentic systems using AWS Nitro Enclaves and Temporal",
+    "private": true,
+    "scripts": {
+        "prepare": "husky"
+    },
+    "devDependencies": {
+        "@commitlint/cli": "^18.4.3",
+        "@commitlint/config-conventional": "^18.4.3",
+        "husky": "^9.0.0"
+    },
+    "keywords": [
+        "aws",
+        "nitro-enclaves",
+        "temporal",
+        "confidential-computing",
+        "tee"
+    ],
+    "author": "",
+    "license": "MIT"
+}
