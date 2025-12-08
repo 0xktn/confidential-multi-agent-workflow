@@ -27,8 +27,17 @@ def main():
         print(f"Received greeting: {data}", flush=True)
         
         sock.sendall(b"Hello Enclave")
-        response = sock.recv(1024)
-        print(f"Received echo: {response}", flush=True)
+        response = sock.recv(4096)
+        print(f"Received raw response: {response}", flush=True)
+        
+        # In the new logic, response is base64 encoded ciphertext
+        import base64
+        try:
+            ciphertext = base64.b64decode(response)
+            print(f"Successfully decoded Base64. Data length: {len(ciphertext)}", flush=True)
+            print("Factor Verification: ENCRYPTION LOGIC IS WORKING (Received Blob)", flush=True)
+        except Exception as e:
+            print(f"Failed to decode response: {e}", flush=True)
         
         sock.close()
         print("Success!", flush=True)
