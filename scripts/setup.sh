@@ -251,6 +251,7 @@ if [[ -n "$INSTANCE_ID" ]]; then
         
         # Poll for IAM association status
         log_info "Waiting for IAM profile association..."
+        ASSOC_OK=false
         for i in {1..30}; do
             STATE=$(aws ec2 describe-iam-instance-profile-associations \
                 --region "$AWS_REGION" \
@@ -259,12 +260,16 @@ if [[ -n "$INSTANCE_ID" ]]; then
                 --output text 2>/dev/null || echo "")
             if [[ "$STATE" == "associated" ]]; then
                 log_info "Profile associated!"
+                ASSOC_OK=true
                 break
             fi
             echo -n "."
             sleep 2
         done
         echo ""
+        if [[ "$ASSOC_OK" != "true" ]]; then
+            log_warn "Association still pending, continuing anyway..."
+        fi
         
         # Restart SSM and poll for online status
         log_info "Restarting SSM agent..."
