@@ -59,8 +59,11 @@ log_info "Running instance setup via SSM..."
 COMMANDS='[
     "sudo dnf update -y",
     "sudo dnf install -y aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel docker git python3 python3-pip",
-    "sudo systemctl enable --now nitro-enclaves-allocator.service",
     "sudo systemctl enable --now docker",
+    "sudo mkdir -p /usr/local/lib/docker/cli-plugins",
+    "sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose",
+    "sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose",
+    "sudo systemctl enable --now nitro-enclaves-allocator.service",
     "sudo usermod -aG ne ec2-user",
     "sudo usermod -aG docker ec2-user",
     "sudo cp /etc/nitro_enclaves/allocator.yaml /etc/nitro_enclaves/allocator.yaml.bak",
@@ -68,6 +71,7 @@ COMMANDS='[
     "sudo systemctl restart nitro-enclaves-allocator.service",
     "nitro-cli --version",
     "docker --version",
+    "docker compose version",
     "python3 --version"
 ]'
 
