@@ -18,13 +18,53 @@ fi
 
 # Parse arguments
 if [[ "$1" == "--status" ]]; then
-    if [[ -z "$2" ]]; then
-        log_error "Usage: $0 --status <workflow-id>"
+    if [[ "$2" == "latest" ]]; then
+        # Get the latest workflow ID
+        log_info "Finding latest workflow..."
+        
+        COMMAND_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["docker exec temporal temporal --address temporal:7233 workflow list --namespace confidential-workflow-poc --limit 1 --query \"WorkflowId\" 2>&1 | grep test- | head -1"]' \
+            --query 'Command.CommandId' \
+            --output text 2>/dev/null)
+        
+        # Poll for completion
+        for i in {1..20}; do
+            STATUS=$(aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query 'Status' \
+                --output text 2>/dev/null || echo "Pending")
+            
+            if [[ "$STATUS" == "Success" ]]; then
+                break
+            fi
+            sleep 0.5
+        done
+        
+        WORKFLOW_ID=$(aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query 'StandardOutputContent' \
+            --output text 2>/dev/null | tr -d '\n' | xargs)
+        
+        if [[ -z "$WORKFLOW_ID" ]]; then
+            log_error "No workflows found"
+            exit 1
+        fi
+        
+        log_info "Latest workflow: $WORKFLOW_ID"
+    elif [[ -z "$2" ]]; then
+        log_error "Usage: $0 --status <workflow-id|latest>"
         exit 1
+    else
+        WORKFLOW_ID="$2"
+        log_info "Checking status of workflow: $WORKFLOW_ID"
     fi
-    
-    WORKFLOW_ID="$2"
-    log_info "Checking status of workflow: $WORKFLOW_ID"
     
     COMMAND_ID=$(aws ssm send-command \
         --region "$AWS_REGION" \
