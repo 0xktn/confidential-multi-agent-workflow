@@ -225,6 +225,32 @@ else
     log_step "Step 2: KMS (Already Complete)"
 fi
 
+# Attach instance profile if not attached at launch
+INSTANCE_ID=$(state_get "instance_id" 2>/dev/null || echo "")
+if [[ -n "$INSTANCE_ID" ]]; then
+    CURRENT_PROFILE=$(aws ec2 describe-iam-instance-profile-associations \
+        --region "$AWS_REGION" \
+        --filters "Name=instance-id,Values=$INSTANCE_ID" \
+        --query 'IamInstanceProfileAssociations[0].IamInstanceProfile.Arn' \
+        --output text 2>/dev/null || echo "None")
+    
+    if [[ "$CURRENT_PROFILE" == "None" ]] || [[ -z "$CURRENT_PROFILE" ]]; then
+        log_info "Attaching instance profile (launched before Step 2)..."
+        aws ec2 associate-iam-instance-profile \
+            --region "$AWS_REGION" \
+            --instance-id "$INSTANCE_ID" \
+            --iam-instance-profile Name=EnclaveInstanceProfile &>/dev/null || true
+        
+        log_info "Restarting SSM agent to load credentials..."
+        INSTANCE_IP=$(state_get "instance_ip" 2>/dev/null)
+        KEY_PATH="$HOME/.ssh/$(state_get "key_name" 2>/dev/null || echo "nitro-enclave-key").pem"
+        
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$KEY_PATH" ec2-user@"$INSTANCE_IP" \
+            "sudo systemctl restart amazon-ssm-agent" 2>/dev/null || true
+        sleep 30
+    fi
+fi
+
 # Step 3: Instance Setup via SSM (must be before Temporal on EC2)
 if ! state_check "instance_setup"; then
     log_step "Step 3: Setting up EC2 Instance via SSM"

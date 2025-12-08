@@ -137,18 +137,38 @@ if [[ "$EXISTING_INSTANCE" != "None" ]] && [[ -n "$EXISTING_INSTANCE" ]]; then
 else
     # Launch new instance
     log_info "No existing instance found. Launching new EC2 instance..."
-    INSTANCE_ID=$(aws ec2 run-instances \
-        --region "$AWS_REGION" \
-        --image-id "$AMI_ID" \
-        --instance-type "$INSTANCE_TYPE" \
-        --key-name "$KEY_NAME" \
-        --security-group-ids "$SG_ID" \
-        --iam-instance-profile Name=EnclaveInstanceProfile \
-        --enclave-options 'Enabled=true' \
-        --block-device-mappings "[{\"DeviceName\":\"/dev/xvda\",\"Ebs\":{\"VolumeSize\":${VOLUME_SIZE},\"VolumeType\":\"gp3\"}}]" \
-        --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${INSTANCE_NAME}}]" \
-        --query 'Instances[0].InstanceId' \
-        --output text)
+    # Check if instance profile exists (created in Step 2)
+    PROFILE_EXISTS=$(aws iam get-instance-profile --instance-profile-name EnclaveInstanceProfile 2>/dev/null && echo "true" || echo "false")
+    
+    if [[ "$PROFILE_EXISTS" == "true" ]]; then
+        log_info "Launching with instance profile..."
+        INSTANCE_ID=$(aws ec2 run-instances \
+            --region "$AWS_REGION" \
+            --image-id "$AMI_ID" \
+            --instance-type "$INSTANCE_TYPE" \
+            --key-name "$KEY_NAME" \
+            --security-group-ids "$SG_ID" \
+            --iam-instance-profile Name=EnclaveInstanceProfile \
+            --enclave-options 'Enabled=true' \
+            --block-device-mappings "[{\"DeviceName\":\"/dev/xvda\",\"Ebs\":{\"VolumeSize\":${VOLUME_SIZE},\"VolumeType\":\"gp3\"}}]" \
+            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${INSTANCE_NAME}}]" \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+    else
+        log_warn "Instance profile not yet created, will attach after Step 2..."
+        INSTANCE_ID=$(aws ec2 run-instances \
+            --region "$AWS_REGION" \
+            --image-id "$AMI_ID" \
+            --instance-type "$INSTANCE_TYPE" \
+            --key-name "$KEY_NAME" \
+            --security-group-ids "$SG_ID" \
+            --enclave-options 'Enabled=true' \
+            --block-device-mappings "[{\"DeviceName\":\"/dev/xvda\",\"Ebs\":{\"VolumeSize\":${VOLUME_SIZE},\"VolumeType\":\"gp3\"}}]" \
+            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${INSTANCE_NAME}}]" \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+    fi
+    
     log_info "Created instance: $INSTANCE_ID"
     
     # Wait for running
