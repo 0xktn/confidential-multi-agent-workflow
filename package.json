@@ -1,6 +1,7 @@
 {
     "name": "confidential-multi-agent-workflow",
     "version": "1.0.0",
+    "type": "module",
     "description": "Secure State Transfer Protocol for distributed agentic systems using AWS Nitro Enclaves and Temporal",
     "private": true,
     "scripts": {
