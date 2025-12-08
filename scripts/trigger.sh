@@ -5,9 +5,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/state.sh"
 
-# Simple logging
-log_info() { echo "[INFO] $*"; }
-log_error() { echo "[ERROR] $*" >&2; }
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
 # Get instance info
 INSTANCE_ID=$(state_get "instance_id" 2>/dev/null || echo "")
@@ -19,6 +26,40 @@ if [[ -z "$INSTANCE_ID" ]]; then
     exit 1
 fi
 
+# Parse arguments
+if [[ "$1" == "--status" ]]; then
+    if [[ -z "$2" ]]; then
+        log_error "Usage: $0 --status <workflow-id>"
+        exit 1
+    fi
+    
+    WORKFLOW_ID="$2"
+    log_info "Checking status of workflow: $WORKFLOW_ID"
+    
+    COMMAND_ID=$(aws ssm send-command \
+        --region "$AWS_REGION" \
+        --instance-ids "$INSTANCE_ID" \
+        --document-name "AWS-RunShellScript" \
+        --parameters "commands=[\"docker exec temporal temporal --address temporal:7233 workflow describe --namespace confidential-workflow-poc --workflow-id $WORKFLOW_ID 2>&1\"]" \
+        --query 'Command.CommandId' \
+        --output text 2>/dev/null)
+    
+    sleep 8
+    
+    RESULT=$(aws ssm get-command-invocation \
+        --region "$AWS_REGION" \
+        --command-id "$COMMAND_ID" \
+        --instance-id "$INSTANCE_ID" \
+        --query 'StandardOutputContent' \
+        --output text 2>/dev/null || echo "")
+    
+    echo ""
+    echo "$RESULT"
+    echo ""
+    exit 0
+fi
+
+# Trigger new workflow
 log_info "Triggering workflow on EC2 instance: $INSTANCE_ID"
 
 # Get timestamp for unique workflow ID
@@ -46,10 +87,10 @@ RESULT=$(aws ssm get-command-invocation \
 
 if [[ -n "$RESULT" ]]; then
     echo ""
-    echo "=== Workflow Started ==="
+    echo -e "${BLUE}=== Workflow Started ===${NC}"
     echo "$RESULT"
     echo ""
-    log_info "Check status with: ./scripts/trigger.sh --status <workflow-id>"
+    log_info "Check status with: ${YELLOW}./scripts/trigger.sh --status $WORKFLOW_ID${NC}"
 else
     ERROR=$(aws ssm get-command-invocation \
         --region "$AWS_REGION" \
