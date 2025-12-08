@@ -259,6 +259,7 @@ if [[ -n "$INSTANCE_ID" ]]; then
                 --query 'IamInstanceProfileAssociations[0].State' \
                 --output text 2>/dev/null || echo "")
             if [[ "$STATE" == "associated" ]]; then
+                echo ""
                 log_info "Profile associated!"
                 ASSOC_OK=true
                 break
