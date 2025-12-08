@@ -235,6 +235,18 @@ if [[ -n "$INSTANCE_ID" ]]; then
         --output text 2>/dev/null || echo "")
     
     if [[ "$CURRENT_PROFILE" != "associated" ]]; then
+        # Wait for instance profile to be available (IAM propagation)
+        log_info "Waiting for instance profile to be available..."
+        for i in {1..30}; do
+            if aws iam get-instance-profile --instance-profile-name EnclaveInstanceProfile &>/dev/null; then
+                log_info "Profile available!"
+                break
+            fi
+            echo -n "."
+            sleep 2
+        done
+        echo ""
+        
         log_info "Attaching instance profile..."
         if ! aws ec2 associate-iam-instance-profile \
             --region "$AWS_REGION" \
