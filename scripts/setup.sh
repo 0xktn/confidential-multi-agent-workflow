@@ -231,22 +231,27 @@ if [[ -n "$INSTANCE_ID" ]]; then
     CURRENT_PROFILE=$(aws ec2 describe-iam-instance-profile-associations \
         --region "$AWS_REGION" \
         --filters "Name=instance-id,Values=$INSTANCE_ID" \
-        --query 'IamInstanceProfileAssociations[0].IamInstanceProfile.Arn' \
-        --output text 2>/dev/null || echo "None")
+        --query 'IamInstanceProfileAssociations[0].State' \
+        --output text 2>/dev/null || echo "")
     
-    if [[ "$CURRENT_PROFILE" == "None" ]] || [[ -z "$CURRENT_PROFILE" ]]; then
-        log_info "Attaching instance profile (launched before Step 2)..."
+    if [[ "$CURRENT_PROFILE" != "associated" ]]; then
+        log_info "Attaching instance profile..."
         aws ec2 associate-iam-instance-profile \
             --region "$AWS_REGION" \
             --instance-id "$INSTANCE_ID" \
-            --iam-instance-profile Name=EnclaveInstanceProfile &>/dev/null || true
+            --iam-instance-profile Name=EnclaveInstanceProfile 2>/dev/null || true
         
-        log_info "Restarting SSM agent to load credentials..."
+        log_info "Waiting for IAM propagation (30s)..."
+        sleep 30
+        
+        log_info "Restarting SSM agent..."
         INSTANCE_IP=$(state_get "instance_ip" 2>/dev/null)
         KEY_PATH="$HOME/.ssh/$(state_get "key_name" 2>/dev/null || echo "nitro-enclave-key").pem"
         
         ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$KEY_PATH" ec2-user@"$INSTANCE_IP" \
             "sudo systemctl restart amazon-ssm-agent" 2>/dev/null || true
+        
+        log_info "Waiting for SSM agent to connect (30s)..."
         sleep 30
     fi
 fi
