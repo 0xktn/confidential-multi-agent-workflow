@@ -45,18 +45,32 @@ state_set "ami_id" "$AMI_ID"
 log_info "AMI ID: $AMI_ID"
 
 # Check/create key pair
-if aws ec2 describe-key-pairs --region "$AWS_REGION" --key-names "$KEY_NAME" &> /dev/null; then
-    log_warn "Key pair '$KEY_NAME' already exists"
+KEY_PATH="$HOME/.ssh/${KEY_NAME}.pem"
+AWS_KEY_EXISTS=$(aws ec2 describe-key-pairs --region "$AWS_REGION" --key-names "$KEY_NAME" 2>/dev/null && echo "yes" || echo "no")
+
+if [[ "$AWS_KEY_EXISTS" == "yes" ]] && [[ -f "$KEY_PATH" ]]; then
+    log_warn "Key pair '$KEY_NAME' already exists (AWS + local)"
+elif [[ "$AWS_KEY_EXISTS" == "yes" ]] && [[ ! -f "$KEY_PATH" ]]; then
+    log_error "Key '$KEY_NAME' exists in AWS but not locally at $KEY_PATH"
+    log_error "Either delete the AWS key pair or restore the local .pem file"
+    exit 1
 else
     log_info "Creating key pair..."
     mkdir -p ~/.ssh
+    
+    # Remove existing file if present (with proper permissions)
+    if [[ -f "$KEY_PATH" ]]; then
+        chmod 600 "$KEY_PATH" 2>/dev/null || true
+        rm -f "$KEY_PATH"
+    fi
+    
     aws ec2 create-key-pair \
         --region "$AWS_REGION" \
         --key-name "$KEY_NAME" \
         --query 'KeyMaterial' \
-        --output text > ~/.ssh/${KEY_NAME}.pem
-    chmod 400 ~/.ssh/${KEY_NAME}.pem
-    log_info "Key saved: ~/.ssh/${KEY_NAME}.pem"
+        --output text > "$KEY_PATH"
+    chmod 400 "$KEY_PATH"
+    log_info "Key saved: $KEY_PATH"
 fi
 
 # Check/create security group
