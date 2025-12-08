@@ -26,7 +26,7 @@ if [[ "$1" == "--status" ]]; then
             --region "$AWS_REGION" \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters 'commands=["docker exec temporal temporal --address temporal:7233 workflow list --namespace confidential-workflow-poc --limit 1 --query \"WorkflowId\" 2>&1 | grep test- | head -1"]' \
+            --parameters 'commands=["docker exec temporal temporal --address temporal:7233 workflow list --namespace confidential-workflow-poc --limit 1 2>&1 | grep -oP \"test-[0-9]+\" | head -1"]' \
             --query 'Command.CommandId' \
             --output text 2>/dev/null)
         
