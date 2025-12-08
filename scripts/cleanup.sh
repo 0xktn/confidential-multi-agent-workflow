@@ -64,7 +64,26 @@ aws iam detach-role-policy --role-name "$ROLE_NAME" --policy-arn arn:aws:iam::aw
 aws iam delete-role --role-name "$ROLE_NAME" 2>/dev/null || true
 log_info "IAM role deleted"
 
-# 4. Delete security group
+# 4. Delete KMS key
+log_info "Deleting KMS key..."
+KMS_KEY_ID=$(state_get "kms_key_id" 2>/dev/null || echo "")
+KMS_ALIAS="alias/confidential-workflow-tsk"
+
+if [[ -n "$KMS_KEY_ID" ]]; then
+    # Delete alias first
+    aws kms delete-alias --region "$AWS_REGION" --alias-name "$KMS_ALIAS" 2>/dev/null || true
+    
+    # Schedule key for deletion (minimum 7 days)
+    aws kms schedule-key-deletion \
+        --region "$AWS_REGION" \
+        --key-id "$KMS_KEY_ID" \
+        --pending-window-in-days 7 2>/dev/null || true
+    log_info "KMS key scheduled for deletion (7 days)"
+else
+    log_info "No KMS key found in state"
+fi
+
+# 5. Delete security group
 log_info "Deleting security group..."
 SG_ID=$(aws ec2 describe-security-groups \
     --region "$AWS_REGION" \
@@ -78,7 +97,7 @@ else
     log_info "No security group found"
 fi
 
-# 5. Delete key pair
+# 6. Delete key pair
 log_info "Deleting key pair..."
 aws ec2 delete-key-pair --region "$AWS_REGION" --key-name "$KEY_NAME" 2>/dev/null || true
 if [[ -f "$HOME/.ssh/${KEY_NAME}.pem" ]]; then
@@ -87,11 +106,11 @@ if [[ -f "$HOME/.ssh/${KEY_NAME}.pem" ]]; then
 fi
 log_info "Key pair deleted"
 
-# 6. Reset local state
+# 7. Reset local state
 log_info "Resetting local state..."
 state_reset
 
-# 7. Clean up local files
+# 8. Clean up local files
 rm -f encrypted-tsk.b64 2>/dev/null || true
 rm -rf temporal-docker 2>/dev/null || true
 rm -rf config 2>/dev/null || true
@@ -102,5 +121,6 @@ echo "  Cleanup Complete!"
 echo "========================================"
 echo ""
 echo "All AWS resources have been deleted."
+echo "NOTE: KMS key is scheduled for deletion in 7 days (AWS minimum)"
 echo "Run './scripts/setup.sh' to start fresh."
 echo ""
