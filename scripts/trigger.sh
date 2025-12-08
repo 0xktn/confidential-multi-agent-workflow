@@ -19,45 +19,15 @@ fi
 # Parse arguments
 if [[ "$1" == "--status" ]]; then
     if [[ "$2" == "latest" ]]; then
-        # Get the latest workflow ID
-        log_info "Finding latest workflow..."
-        
-        COMMAND_ID=$(aws ssm send-command \
-            --region "$AWS_REGION" \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --parameters 'commands=["docker exec temporal temporal --address temporal:7233 workflow list --namespace confidential-workflow-poc --limit 1 2>&1 | grep -oP \"test-[0-9]+\" | head -1"]' \
-            --query 'Command.CommandId' \
-            --output text 2>/dev/null)
-        
-        # Poll for completion
-        for i in {1..20}; do
-            STATUS=$(aws ssm get-command-invocation \
-                --region "$AWS_REGION" \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --query 'Status' \
-                --output text 2>/dev/null || echo "Pending")
-            
-            if [[ "$STATUS" == "Success" ]]; then
-                break
-            fi
-            sleep 0.5
-        done
-        
-        WORKFLOW_ID=$(aws ssm get-command-invocation \
-            --region "$AWS_REGION" \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID" \
-            --query 'StandardOutputContent' \
-            --output text 2>/dev/null | tr -d '\n' | xargs)
+        # Get the latest workflow ID from cache
+        WORKFLOW_ID=$(state_get "last_workflow_id" 2>/dev/null || echo "")
         
         if [[ -z "$WORKFLOW_ID" ]]; then
-            log_error "No workflows found"
+            log_error "No workflows found in cache. Trigger a workflow first."
             exit 1
         fi
         
-        log_info "Latest workflow: $WORKFLOW_ID"
+        log_info "Latest workflow (cached): $WORKFLOW_ID"
     elif [[ -z "$2" ]]; then
         log_error "Usage: $0 --status <workflow-id|latest>"
         exit 1
@@ -143,11 +113,15 @@ RESULT=$(aws ssm get-command-invocation \
     --output text 2>/dev/null || echo "")
 
 if [[ -n "$RESULT" ]]; then
+    # Save workflow ID to state for quick lookup
+    state_set "last_workflow_id" "$WORKFLOW_ID"
+    
     echo ""
     echo -e "${BLUE}=== Workflow Started ===${NC}"
     echo "$RESULT"
     echo ""
     log_info "Check status with: ${YELLOW}./scripts/trigger.sh --status $WORKFLOW_ID${NC}"
+    log_info "Or use: ${YELLOW}./scripts/trigger.sh --status latest${NC}"
 else
     ERROR=$(aws ssm get-command-invocation \
         --region "$AWS_REGION" \
