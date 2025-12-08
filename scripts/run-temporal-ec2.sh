@@ -45,11 +45,17 @@ services:
       - temporal-network
     expose:
       - 5432
+    healthcheck:
+      test: [\"CMD-SHELL\", \"pg_isready -U temporal\"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   temporal:
     container_name: temporal
     depends_on:
-      - postgresql
+      postgresql:
+        condition: service_healthy
     environment:
       - DB=postgres12
       - DB_PORT=5432
@@ -64,6 +70,12 @@ services:
       - 7233:7233
     volumes:
       - ./dynamicconfig:/etc/temporal/config/dynamicconfig
+    healthcheck:
+      test: [\"CMD\", \"tctl\", \"cluster\", \"health\"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
 
   temporal-ui:
     container_name: temporal-ui
@@ -132,34 +144,55 @@ while true; do
 done
 echo ""
 
-# Wait for Temporal to be ready
-log_info "Waiting for Temporal server to be ready..."
+# Wait for Temporal to be healthy (using Docker's native healthcheck)
+log_info "Waiting for Temporal to be healthy..."
 
-for i in {1..12}; do
-    HEALTH_CHECK=$(aws ssm send-command \
-        --region "$AWS_REGION" \
-        --instance-ids "$INSTANCE_ID" \
-        --document-name "AWS-RunShellScript" \
-        --parameters 'commands=["docker exec temporal tctl cluster health 2>&1"]' \
-        --query 'Command.CommandId' \
-        --output text 2>/dev/null)
-    
-    sleep 10
-    
-    HEALTH_RESULT=$(aws ssm get-command-invocation \
+WAIT_CMD='
+for i in {1..60}; do
+    STATUS=$(docker inspect temporal --format="{{.State.Health.Status}}" 2>/dev/null || echo "starting")
+    if [ "$STATUS" = "healthy" ]; then
+        echo "Temporal is healthy!"
+        exit 0
+    fi
+    echo -n "."
+    sleep 5
+done
+echo ""
+echo "Timeout waiting for Temporal health check"
+exit 1
+'
+
+HEALTH_CHECK=$(aws ssm send-command \
+    --region "$AWS_REGION" \
+    --instance-ids "$INSTANCE_ID" \
+    --document-name "AWS-RunShellScript" \
+    --parameters "commands=[\"$WAIT_CMD\"]" \
+    --query 'Command.CommandId' \
+    --output text 2>/dev/null)
+
+# Wait for health check to complete
+while true; do
+    STATUS=$(aws ssm get-command-invocation \
         --region "$AWS_REGION" \
         --command-id "$HEALTH_CHECK" \
         --instance-id "$INSTANCE_ID" \
-        --query 'StandardOutputContent' \
-        --output text 2>/dev/null || echo "")
+        --query 'Status' \
+        --output text 2>/dev/null || echo "Pending")
     
-    if echo "$HEALTH_RESULT" | grep -q "SERVING"; then
-        log_info "Temporal server is ready!"
-        break
-    else
-        echo -n "."
-        sleep 10
-    fi
+    case "$STATUS" in
+        "Success")
+            log_info "Temporal is ready!"
+            break
+            ;;
+        "Failed"|"Cancelled"|"TimedOut")
+            log_error "Health check failed: $STATUS"
+            exit 1
+            ;;
+        *)
+            echo -n "."
+            sleep 10
+            ;;
+    esac
 done
 echo ""
 
@@ -169,7 +202,7 @@ aws ssm send-command \
     --region "$AWS_REGION" \
     --instance-ids "$INSTANCE_ID" \
     --document-name "AWS-RunShellScript" \
-    --parameters 'commands=["docker exec temporal tctl --namespace '"$NAMESPACE"' namespace register 2>&1"]' \
+    --parameters 'commands=["docker exec temporal tctl --address temporal:7233 --namespace '"$NAMESPACE"' namespace register 2>&1 || echo Namespace already exists"]' \
     >/dev/null 2>&1
 
 sleep 5
