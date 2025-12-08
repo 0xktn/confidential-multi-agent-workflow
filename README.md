@@ -45,33 +45,45 @@ The workflow executes a sequential transfer of state between Agent A and Agent B
 
 ## Getting Started
 
-### Infrastructure and Key Policy Configuration
+### Prerequisites
 
-- [ ] **KMS Key Generation**: Create a Symmetric Key in AWS KMS to serve as the master wrapper for the Trusted Session Key.
-- [ ] **Policy Hardening**: Modify the KMS Key Policy to enforce cryptographic attestation. Add a Condition requiring kms:RecipientAttestation:ImageSha384 to match the hash of your specific Enclave Image File (EIF).
+- **AWS CLI** configured with credentials (`aws configure`)
+- **SQLite** (pre-installed on macOS, `apt install sqlite3` on Linux)
+- Required AWS permissions: `AmazonEC2FullAccess`, `AWSKeyManagementServicePowerUser`, `IAMFullAccess`, `AmazonSSMFullAccess`
 
-### Enclave Application Development
+### Quick Start
 
-Develop the "Trusted" application logic to run inside the enclave. This application must handle:
+```bash
+# Clone the repository
+git clone https://github.com/0xktn/confidential-multi-agent-workflow.git
+cd confidential-multi-agent-workflow
 
-- [ ] **vsock Listener**: Bind a socket server to port 5000 to listen for commands from the host.
-- [ ] **Attestation Client**: Implement the KMS Decrypt call using the Nitro Enclaves SDK to retrieve the TSK.
-- [ ] **Agent Logic**:
-  - [ ] Mode A: Generate data, serialize, encrypt.
-  - [ ] Mode B: Receive ciphertext, decrypt, modify data, encrypt.
-- [ ] **Packaging**: Use nitro-cli build-enclave to convert the Docker image into an EIF. Record the PCR0 value output by this process for the KMS policy.
+# Set a passphrase for local state encryption
+echo "your-passphrase" > INSECURE_PASSWORD_TEXT
 
-### Host Worker and Workflow Definition
+# Run the automated setup (takes ~10 minutes)
+./scripts/setup.sh
+```
 
-Develop the "Untrusted" host application using the Temporal Python SDK.
+The setup script automatically:
+1. Creates an EC2 instance with Nitro Enclave support
+2. Configures KMS key with attestation policy  
+3. Starts Temporal server on EC2
+4. Builds and runs the enclave
+5. Starts the host worker
 
-- [ ] **Activity Definition**: Create a generic SecureEnclaveActivity that:
-  - [ ] Connects to the Enclave via vsock (CID: 3, Port: 5000).
-  - [ ] Proxies the binary payload (ciphertext) into the socket.
-  - [ ] Reads the binary response from the socket.
-- [ ] **Workflow Definition**: Define a linear sequence:
-  - [ ] Step 1: Execute SecureEnclaveActivity (Agent A inputs).
-  - [ ] Step 2: Pass result of Step 1 to SecureEnclaveActivity (Agent B inputs).
+### After Setup
+
+```bash
+# Check status
+./scripts/setup.sh --remote-status
+
+# SSH into the instance
+ssh -i ~/.ssh/nitro-enclave-key.pem ec2-user@<instance-ip>
+
+# Cleanup all resources
+./scripts/setup.sh --clean
+```
 
 ## Verification Procedure
 
