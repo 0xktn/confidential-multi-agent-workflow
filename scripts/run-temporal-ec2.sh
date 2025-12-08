@@ -134,41 +134,47 @@ while true; do
 done
 echo ""
 
-# Create namespace (with retry since Temporal takes time to fully start)
-log_info "Creating namespace: $NAMESPACE"
+# Wait for Temporal to be ready
+log_info "Waiting for Temporal server to be ready..."
 
-for i in {1..6}; do
-    log_info "Attempting namespace creation (attempt $i/6)..."
-    
-    NAMESPACE_RESULT=$(aws ssm send-command \
+for i in {1..12}; do
+    HEALTH_CHECK=$(aws ssm send-command \
         --region "$AWS_REGION" \
         --instance-ids "$INSTANCE_ID" \
         --document-name "AWS-RunShellScript" \
-        --parameters 'commands=["docker exec temporal tctl --namespace '"$NAMESPACE"' namespace register 2>&1"]' \
+        --parameters 'commands=["docker exec temporal tctl cluster health 2>&1"]' \
         --query 'Command.CommandId' \
         --output text 2>/dev/null)
     
-    sleep 15
+    sleep 10
     
-    # Check if creation succeeded
-    RESULT=$(aws ssm get-command-invocation \
+    HEALTH_RESULT=$(aws ssm get-command-invocation \
         --region "$AWS_REGION" \
-        --command-id "$NAMESPACE_RESULT" \
+        --command-id "$HEALTH_CHECK" \
         --instance-id "$INSTANCE_ID" \
         --query 'StandardOutputContent' \
         --output text 2>/dev/null || echo "")
     
-    if echo "$RESULT" | grep -q "Namespace.*registered"; then
-        log_info "Namespace created successfully!"
-        break
-    elif echo "$RESULT" | grep -q "already exists"; then
-        log_info "Namespace already exists"
+    if echo "$HEALTH_RESULT" | grep -q "SERVING"; then
+        log_info "Temporal server is ready!"
         break
     else
-        log_warn "Temporal not ready yet, waiting..."
-        sleep 15
+        echo -n "."
+        sleep 10
     fi
 done
+echo ""
+
+# Create namespace
+log_info "Creating namespace: $NAMESPACE"
+aws ssm send-command \
+    --region "$AWS_REGION" \
+    --instance-ids "$INSTANCE_ID" \
+    --document-name "AWS-RunShellScript" \
+    --parameters 'commands=["docker exec temporal tctl --namespace '"$NAMESPACE"' namespace register 2>&1"]' \
+    >/dev/null 2>&1
+
+sleep 5
 
 state_set "temporal_host" "localhost:7233"
 state_set "temporal_namespace" "$NAMESPACE"
