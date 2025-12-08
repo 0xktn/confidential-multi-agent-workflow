@@ -73,3 +73,5 @@ coverage/
 tmp/
 temp/
 *.tmp
+.state/
+INSECURE_PASSWORD_TEXT
