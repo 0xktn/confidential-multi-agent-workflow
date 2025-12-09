@@ -1,6 +1,9 @@
 # Use pre-built kmstool from GHCR
-# Built from AWS's official aws-nitro-enclaves-sdk-c v0.4.3 using Dockerfile.al2
-FROM ghcr.io/0xktn/kmstool:v0.4.3 AS kmstool-base
+# Built from AWS's official aws-nitro-enclaves-sdk-c v0.4.3# Helper image to extract kmstool and libnsm using official AWS packages
+FROM amazonlinux:2 AS kmstool-base
+RUN amazon-linux-extras install aws-nitro-enclaves-cli && \
+    yum install -y aws-nitro-enclaves-cli-devel && \
+    yum clean all
 
 # Final stage: Add Python and our application
 FROM python:3.11-slim
