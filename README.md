@@ -38,10 +38,11 @@ The workflow executes a sequential transfer of state between Agent A and Agent B
 
 ## Prerequisites
 
-- **Infrastructure**: AWS EC2 Instance (Parent) with Nitro Enclave support (e.g., m5.xlarge, c5.xlarge).
-- **Operating System**: Amazon Linux 2 or 2023 with aws-nitro-enclaves-cli installed.
-- **Orchestration Server**: Access to a Temporal Server (Temporal Cloud or Self-Hosted).
-- **Language Runtime**: Python 3.9+ environment for both Host and Enclave logic.
+- **Infrastructure**: AWS EC2 Instance (Parent) with Nitro Enclave support (verified on `c6a.xlarge`, `m5.xlarge`).
+- **Operating System**: Amazon Linux 2023 (Verified). Ubuntu/AL2 are NOT supported.
+- **Enclave Resources**: Minimum 2048 MB RAM and 2 vCPUs verified for Python Encryption stack.
+- **Orchestration Server**: Access to a Temporal Server (Temporal Cloud or Self-Hosted on Host).
+- **Language Runtime**: Python 3.9+ (Host), Python 3.11 (Enclave Base).
 
 ## Getting Started
 
@@ -85,6 +86,66 @@ ssh -i ~/.ssh/nitro-enclave-key.pem ec2-user@<instance-ip>
 ./scripts/setup.sh --clean
 ```
 
+## KMS Attestation Setup
+
+### Understanding PCR0
+
+PCR0 (Platform Configuration Register 0) is a cryptographic hash of the enclave image file (EIF). AWS KMS uses this measurement to verify the enclave's identity before releasing decryption keys.
+
+**Key Concept**: Every time you rebuild the enclave image, the PCR0 value changes. You must update the KMS key policy with the new PCR0 to maintain access.
+
+### Initial Setup
+
+The automated setup script handles KMS configuration, but if you need to manually update the policy:
+
+```bash
+# 1. Build the enclave image
+cd enclave
+docker build -t confidential-enclave .
+nitro-cli build-enclave --docker-uri confidential-enclave:latest --output-file ../build/enclave.eif
+
+# 2. Extract PCR0 from build output
+# Look for: "PCR0": "ff332b26..."
+
+# 3. Update KMS policy with new PCR0
+# Edit scripts/update_policy_local.py with the new PCR0 value
+python3 scripts/update_policy_local.py
+
+# 4. Generate new encrypted TSK
+# The script automatically creates encrypted-tsk.b64
+```
+
+### Current PCR0
+
+```
+ff332b261c7e90783f1782aad362dd1c9f0cd75f95687f78816933145c62a78c18b8fbe644adadd116a2d4305b888994
+```
+
+### Testing KMS Attestation
+
+Verify the end-to-end KMS attestation flow:
+
+```bash
+# On the EC2 instance
+cd /home/ec2-user/confidential-multi-agent-workflow
+
+# Ensure vsock-proxy is running
+vsock-proxy 8000 kms.ap-southeast-1.amazonaws.com 443 &
+
+# Ensure enclave is running
+nitro-cli describe-enclaves
+
+# Run the test
+python3 scripts/test_kms_attestation.py
+```
+
+**Expected Output**:
+```
+✅ Configuration successful! TSK decrypted via kmstool with attestation!
+✅ Processing successful!
+🎉 END-TO-END KMS ATTESTATION TEST PASSED!
+```
+
 ## Verification Procedure
 
 To validate the success of the POC, confirm the following metrics:
@@ -99,6 +160,23 @@ To validate the success of the POC, confirm the following metrics:
 3. **Integrity Verification**:
    - Decrypt the final output of the workflow locally (using a debugging key or admin access).
    - Requirement: The final state must reflect modifications made by Agent B, proving the secure handoff and processing occurred successfully within the enclave boundary.
+
+### CloudTrail Verification
+
+Verify that KMS Decrypt calls include attestation documents:
+
+```bash
+# On the EC2 instance
+python3 scripts/verify_cloudtrail.py
+```
+
+**Note**: CloudTrail events have a 5-15 minute delay. The script queries the last hour of KMS Decrypt events and checks for attestation documents.
+
+**Expected Output**:
+```
+✅ Attestation documents found in KMS Decrypt requests
+✅ PCR0 verification successful
+```
 
 ## Security Considerations
 
@@ -116,6 +194,7 @@ To validate the success of the POC, confirm the following metrics:
 
 - **Single Region**: This POC assumes all components operate within a single AWS region
 - **Key Rotation**: Manual key rotation procedures are not implemented
+- **KMS Network Proxy**: The enclave currently uses a direct vsock proxy or internal stub for KMS; full production proxy requires dedicated sidecar.
 - **Audit Logging**: Enhanced audit trails for compliance requirements need additional implementation
 - **Network Isolation**: Additional network policies may be required for production deployments
 
@@ -137,8 +216,9 @@ To validate the success of the POC, confirm the following metrics:
 
 ## Performance Considerations
 
-- **Enclave Memory**: Allocate sufficient memory (minimum 512MB recommended) for cryptographic operations
-- **vCPU Count**: At least 2 vCPUs recommended for production workloads
+- **Enclave Memory**: Allocate sufficient memory (minimum 2048 MB required for modern Python crypto libraries).
+- **vCPU Count**: At least 2 vCPUs required (1 for Kernel, 1 for App).
+
 - **Network Latency**: vsock communication adds ~1-5ms overhead per call
 - **Encryption Overhead**: AES-256-GCM encryption adds minimal overhead (<1ms for typical payloads)
 
