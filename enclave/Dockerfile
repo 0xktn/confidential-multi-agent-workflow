@@ -3,11 +3,11 @@
 # Helper image to build kmstool from source
 FROM amazonlinux:2 AS kmstool-base
 RUN amazon-linux-extras install aws-nitro-enclaves-cli && \
-    yum install -y aws-nitro-enclaves-cli-devel git cmake3 gcc make && \
+    yum install -y aws-nitro-enclaves-cli-devel git cmake3 gcc make json-c-devel && \
     yum clean all
 
 WORKDIR /tmp/sdk
-RUN git clone https://github.com/aws/aws-nitro-enclaves-sdk-c.git . && \
+RUN git clone --recursive https://github.com/aws/aws-nitro-enclaves-sdk-c.git . && \
     mkdir build && cd build && \
     cmake3 .. -DNITRO_ENCLAVES_QS_LOG_LEVEL=3 && \
     make && \
