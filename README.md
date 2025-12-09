@@ -26,6 +26,46 @@ This POC implements a "Full Confidential Execution" model. The architecture divi
 | Host Interface | vsock | Facilitates local socket communication between the untrusted Parent Instance and the Trusted Enclave. |
 | Serialization | Protocol Buffers | Provides schema-bound binary serialization to ensure type safety and prevent deserialization attacks at the TEE boundary. |
 
+### Architecture Diagram
+
+```mermaid
+sequenceDiagram
+    participant T as Temporal Server
+    participant W as Worker (Host)
+    participant V as vsock
+    participant E as Enclave
+    participant K as AWS KMS
+    participant P as vsock-proxy
+
+    Note over E,K: Enclave Initialization
+    W->>V: Start Enclave
+    E->>E: Boot + Load kmstool
+    
+    Note over W,E: KMS Attestation Flow
+    W->>V: Send configure(encrypted_tsk, credentials)
+    V->>E: Forward request
+    E->>E: Generate attestation document
+    E->>P: kmstool decrypt(encrypted_tsk, attestation)
+    P->>K: KMS Decrypt + Attestation
+    K->>K: Validate PCR0
+    K-->>P: Plaintext TSK
+    P-->>E: Plaintext TSK
+    E->>E: Initialize encryption service
+    E-->>V: {status: "ok"}
+    V-->>W: Configuration successful
+    
+    Note over T,E: Workflow Execution
+    T->>W: Execute activity(plaintext_data)
+    W->>V: Send process(plaintext_data)
+    V->>E: Forward request
+    E->>E: Encrypt with TSK
+    E-->>V: {ciphertext}
+    V-->>W: Encrypted result
+    W-->>T: Store ciphertext in history
+    
+    Note over T: Temporal persists encrypted data only
+```
+
 ### Data Flow: The Secure State Loop
 
 The workflow executes a sequential transfer of state between Agent A and Agent B following this protocol:
@@ -202,17 +242,114 @@ python3 scripts/verify_cloudtrail.py
 
 ### Common Issues
 
+#### KMS Attestation Failures
+
 **Issue**: `KMS Decrypt failed - Invalid attestation document`
 - **Cause**: PCR0 mismatch between EIF and KMS policy
-- **Solution**: Rebuild the enclave image and update the KMS key policy with the new PCR0 hash
+- **Solution**: 
+  ```bash
+  # 1. Rebuild enclave and extract new PCR0
+  nitro-cli build-enclave --docker-uri confidential-enclave:latest --output-file build/enclave.eif
+  
+  # 2. Update KMS policy
+  # Edit scripts/update_policy_local.py with new PCR0
+  python3 scripts/update_policy_local.py
+  
+  # 3. Restart enclave
+  nitro-cli terminate-enclave --all
+  nitro-cli run-enclave --eif-path build/enclave.eif --enclave-cid 16 --cpu-count 2 --memory 1024
+  ```
+
+**Issue**: `AWS_IO_SOCKET_NOT_CONNECTED` or `connection failure`
+- **Cause**: `vsock-proxy` not running
+- **Solution**:
+  ```bash
+  # Start vsock-proxy
+  pkill vsock-proxy || true
+  vsock-proxy 8000 kms.ap-southeast-1.amazonaws.com 443 &
+  ```
+
+**Issue**: `AWS_IO_TLS_NEGOTIATION_TIMEOUT`
+- **Cause**: CA certificates not found by kmstool
+- **Solution**: Verify Dockerfile has CA certificate symlink:
+  ```dockerfile
+  RUN mkdir -p /etc/pki/tls/certs && \
+      ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
+  ```
+
+#### Enclave Issues
 
 **Issue**: `vsock connection refused`
 - **Cause**: Enclave not running or incorrect CID/port
-- **Solution**: Verify enclave is running with `nitro-cli describe-enclaves` and check vsock configuration
+- **Solution**: 
+  ```bash
+  # Check enclave status
+  nitro-cli describe-enclaves
+  
+  # If not running, start it
+  nitro-cli run-enclave --eif-path build/enclave.eif --enclave-cid 16 --cpu-count 2 --memory 1024 --debug-mode
+  
+  # Check enclave console logs
+  nitro-cli console --enclave-id <ENCLAVE_ID>
+  ```
+
+**Issue**: Enclave fails to start with "insufficient memory"
+- **Cause**: HugePages not allocated
+- **Solution**:
+  ```bash
+  # Restart allocator service
+  sudo systemctl restart nitro-enclaves-allocator
+  
+  # Verify hugepages
+  cat /proc/meminfo | grep HugePages
+  ```
+
+**Issue**: Enclave crashes silently
+- **Cause**: Python runtime incompatibility or missing dependencies
+- **Solution**: Check enclave logs in `/tmp/enclave.log` (if configured) or use debug mode
+
+#### Temporal Issues
 
 **Issue**: `Temporal workflow timeout`
 - **Cause**: Enclave processing taking longer than workflow timeout
 - **Solution**: Increase workflow timeout or optimize enclave processing logic
+
+**Issue**: Worker can't find `encrypted-tsk.b64`
+- **Cause**: Path resolution issue when worker runs from different directory
+- **Solution**: Verify `activities.py` has correct path resolution (fixed in latest version)
+
+**Issue**: IMDS timeout in worker
+- **Cause**: Network latency or IMDS throttling
+- **Solution**: Increase timeout in `activities.py` (currently set to 5 seconds)
+
+#### CloudTrail Issues
+
+**Issue**: `AccessDeniedException` when running `verify_cloudtrail.py`
+- **Cause**: Missing IAM permission
+- **Solution**:
+  ```bash
+  # Add CloudTrail permission to instance role
+  aws iam put-role-policy --role-name EnclaveInstanceRole \
+    --policy-name CloudTrailReadAccess \
+    --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["cloudtrail:LookupEvents"],"Resource":"*"}]}'
+  ```
+
+**Issue**: No attestation documents found in CloudTrail
+- **Cause**: CloudTrail has 5-15 minute delay, or no recent KMS calls from enclave
+- **Solution**: Run `test_kms_attestation.py` to generate fresh event, wait 15 minutes, then check CloudTrail
+
+### Debug Mode
+
+For detailed debugging, run the enclave in debug mode:
+
+```bash
+nitro-cli run-enclave --eif-path build/enclave.eif --enclave-cid 16 --cpu-count 2 --memory 1024 --debug-mode
+
+# View console output
+nitro-cli console --enclave-id <ENCLAVE_ID>
+```
+
+**Note**: Debug mode disables some security features and should not be used in production.
 
 ## Performance Considerations
 
