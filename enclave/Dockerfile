@@ -4,8 +4,8 @@
 FROM amazonlinux:2 AS kmstool-base
 RUN yum install -y yum-utils && \
     amazon-linux-extras enable aws-nitro-enclaves-cli && \
-    yumdownloader aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel && \
-    rpm -ivh --noscripts aws-nitro-enclaves-cli*.rpm && \
+    yumdownloader aws-nitro-enclaves-cli-devel && \
+    rpm -ivh --nodeps aws-nitro-enclaves-cli-devel*.rpm && \
     yum install -y git cmake3 gcc make json-c-devel && \
     yum clean all
 
