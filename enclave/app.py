@@ -122,13 +122,20 @@ class KMSAttestationClient:
 class EncryptionService:
     def __init__(self, key: bytes):
         if not AESGCM:
+            print(f"[ERROR] Cryptography module missing. Trace: {IMPORT_ERROR_TRACE}", flush=True)
             raise ImportError(f"Cryptography module missing. Trace: {IMPORT_ERROR_TRACE}")
             
+        print(f"[ENCLAVE] EncryptionService init with key length: {len(key)} bytes, type: {type(key)}", flush=True)
+        
         if len(key) != 32:
-            # Pad or truncate for stub stability if fallback key is wrong size
-            key = (key * 32)[:32]
+            print(f"[ERROR] Invalid key length: {len(key)}. Expected 32 bytes.", flush=True)
+            if isinstance(key, bytes):
+                print(f"[ERROR] Key dump (hex): {key.hex()}", flush=True)
+            # Throw explicit error instead of silent truncation for debugging real flow
+            raise ValueError(f"Invalid TSK length: {len(key)}. Expected 32 bytes.")
             
         self.aesgcm = AESGCM(key)
+        print("[ENCLAVE] EncryptionService initialized successfully with AESGCM", flush=True)
 
     def encrypt(self, plaintext: str) -> str:
         nonce = os.urandom(12)
@@ -222,7 +229,9 @@ class EnclaveApp:
                 
         except Exception as e:
             print(f"[ERROR] Handler: {e}", flush=True)
-            conn.sendall(json.dumps({'status': 'error', 'exception': str(e)}).encode())
+            import traceback
+            traceback.print_exc()
+            conn.sendall(json.dumps({'status': 'error', 'exception': str(e), 'traceback': traceback.format_exc()}).encode())
         finally:
             conn.close()
 
