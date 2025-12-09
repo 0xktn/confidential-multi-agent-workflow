@@ -2,6 +2,7 @@ import socket
 import sys
 import os
 import json
+import subprocess
 
 # Force line buffering
 sys.stdout.reconfigure(line_buffering=True)
