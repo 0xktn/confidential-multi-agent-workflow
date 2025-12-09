@@ -1,19 +1,26 @@
-# Debug: Prove console write works immediately
-echo "[ENCLAVE] BOOTING..." > /dev/console
+#!/bin/sh
 
-# Setup log file and background streamer
+# Setup log file
 touch /tmp/enclave.log
-tail -f /tmp/enclave.log > /dev/console &
-TAIL_PID=$!
+
+# Background broadcaster: Spams console with state every 2s so we can't miss it
+(
+  while true; do
+    echo "=== [$(date)] ENCLAVE MONITOR ===" > /dev/console
+    echo "--- PROCESSES ---" > /dev/console
+    ps -ef > /dev/console
+    echo "--- LOG TAIL (20 lines) ---" > /dev/console
+    tail -n 20 /tmp/enclave.log > /dev/console
+    sleep 2
+  done
+) &
 
 echo "[ENCLAVE] STARTING PYTHON..." >> /tmp/enclave.log
-which python3.11 >> /tmp/enclave.log 2>&1
-
-# Run app
 python3.11 -u /app/app.py >> /tmp/enclave.log 2>&1
+echo "[ENCLAVE] PYTHON EXITED WITH CODE $?" >> /tmp/enclave.log
 
-# Cleanup
-kill $TAIL_PID
+# Keep alive to continue broadcasting logs
+tail -f /tmp/enclave.log > /dev/console
 
 echo "[ENCLAVE] Starting..."
 echo "[ENCLAVE] Environment: $(uname -a)"
