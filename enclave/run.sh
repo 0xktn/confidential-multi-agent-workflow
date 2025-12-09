@@ -1,6 +1,6 @@
 #!/bin/sh
 # Force all output to the enclave console
-exec >/dev/console 2>&1
+exec >/tmp/enclave.log 2>&1
 
 echo "[ENCLAVE] Starting..."
 echo "[ENCLAVE] Environment: $(uname -a)"

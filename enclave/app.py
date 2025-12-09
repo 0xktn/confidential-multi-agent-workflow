@@ -37,15 +37,20 @@ import io
 
 class EnclaveLogger:
     def __init__(self):
-        self.logs = io.StringIO()
+        self.log_file = "/tmp/enclave.log"
     
     def log(self, message):
-        line = f"[ENCLAVE] {message}"
-        print(line, flush=True)
-        self.logs.write(line + "\n")
+        # We rely on print() being redirected to the file by run.sh
+        # But we can also explicitly write if needed.
+        # Since run.sh does redirection, print is enough.
+        print(f"[ENCLAVE] {message}", flush=True)
         
     def get_logs(self):
-        return self.logs.getvalue()
+        try:
+            with open(self.log_file, "r") as f:
+                return f.read()
+        except Exception as e:
+            return f"Error reading logs: {e}"
 
 logger = EnclaveLogger()
 
