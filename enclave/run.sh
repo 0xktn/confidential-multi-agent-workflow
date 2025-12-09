@@ -1,13 +1,19 @@
-#!/bin/sh
-# Force all output to the enclave console
-# Run app in foreground, redirecting to file.
-# If it crashes, we proceed to tail the log so we can see what happened.
-python3.11 -u /app/app.py >/tmp/enclave.log 2>&1
+# Debug: Prove console write works immediately
+echo "[ENCLAVE] BOOTING..." > /dev/console
 
-# If python exits, dump the log and keep the enclave alive for a bit to allow extraction
-echo "[ENCLAVE] App exited. Dumping logs..." > /dev/console
-cat /tmp/enclave.log > /dev/console
-tail -f /tmp/enclave.log > /dev/console
+# Setup log file and background streamer
+touch /tmp/enclave.log
+tail -f /tmp/enclave.log > /dev/console &
+TAIL_PID=$!
+
+echo "[ENCLAVE] STARTING PYTHON..." >> /tmp/enclave.log
+which python3.11 >> /tmp/enclave.log 2>&1
+
+# Run app
+python3.11 -u /app/app.py >> /tmp/enclave.log 2>&1
+
+# Cleanup
+kill $TAIL_PID
 
 echo "[ENCLAVE] Starting..."
 echo "[ENCLAVE] Environment: $(uname -a)"
