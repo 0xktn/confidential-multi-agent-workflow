@@ -34,18 +34,37 @@ def test_kms_attestation():
         'region': 'ap-southeast-1'
     }
     sock.sendall(json.dumps(config_msg).encode())
+    config_sock.sendall(json.dumps(config_msg).encode())
     
     # Wait for response
-    response = sock.recv(4096)
+    response = config_sock.recv(4096)
     print(f"Config Response: {response}")
     
     result = json.loads(response.decode())
-    if result.get('status') != 'ok':
-        print(f"❌ Configuration failed: {result}")
-        return False
     
-    print("✅ Configuration successful! TSK decrypted via kmstool with attestation!")
-    sock.close()
+    # FETCH LOGS NOW to see TSK details before potential crash
+    print("\n📥 Fetching enclave logs (intermediate)...")
+    try:
+        log_sock = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+        log_sock.settimeout(5)
+        log_sock.connect((16, 5000))
+        log_sock.sendall(json.dumps({'type': 'get_logs'}).encode())
+        log_response = json.loads(log_sock.recv(16384).decode())
+        print("=== ENCLAVE LOGS (Config Phase) ===")
+        print(log_response.get('logs', 'No logs returned'))
+        print("===================================\n")
+        log_sock.close()
+    except Exception as e:
+        print(f"Failed to fetch intermediate logs: {e}")
+
+    if result.get('status') == 'ok':
+        print("✅ Configuration successful! TSK decrypted via kmstool with attestation!")
+    else:
+        print(f"❌ Configuration failed: {result}")
+        config_sock.close() # Close the config socket on failure
+        return False
+
+    config_sock.close() # Close the config socket after successful configuration
     
     # Now test processing
     print("\nTesting data processing with decrypted TSK...")
