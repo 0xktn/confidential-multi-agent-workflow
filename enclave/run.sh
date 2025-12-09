@@ -15,20 +15,20 @@ touch /tmp/enclave.log
   done
 ) &
 
-echo "[ENCLAVE] STARTING PYTHON..." >> /tmp/enclave.log
-python3.11 -u /app/app.py >> /tmp/enclave.log 2>&1
-echo "[ENCLAVE] PYTHON EXITED WITH CODE $?" >> /tmp/enclave.log
+# Run Python app with standard logging
+echo "[ENCLAVE] Starting Python app..." > /dev/console
+echo "[ENCLAVE] Starting Python app..." > /tmp/enclave.log
 
-# Keep alive to continue broadcasting logs
-tail -f /tmp/enclave.log > /dev/console
+# Use python3 (symlink to 3.11 in slim)
+# Unbuffered output
+python3 -u /app/app.py >> /tmp/enclave.log 2>&1
+EXIT_CODE=$?
 
-echo "[ENCLAVE] Starting..."
-echo "[ENCLAVE] Environment: $(uname -a)"
+echo "[ENCLAVE] App exited with code $EXIT_CODE" >> /tmp/enclave.log
+echo "[ENCLAVE] App exited with code $EXIT_CODE" > /dev/console
 
-# Export unbuffered python
-export PYTHONUNBUFFERED=1
+# Dump log to console for debugging
+cat /tmp/enclave.log > /dev/console
 
-# Run Python app
-# Use exec to ensure signals are passed to the python process
-# Run the application with unbuffered output
-exec python3.11 -u /app/app.py
+# Drop into shell if it crashed, or exit
+exit $EXIT_CODE
