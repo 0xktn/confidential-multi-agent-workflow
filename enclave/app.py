@@ -12,13 +12,28 @@ sys.stderr.reconfigure(line_buffering=True)
 
 print("[ENCLAVE] App Starting (Full Logic)...", flush=True)
 
-# Lazy imports
-try:
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    print("[ENCLAVE] Cryptography imported")
-except ImportError as e:
-    print(f"[ERROR] Cryptography missing: {e}")
-    AESGCM = None
+# Lazy imports - Commented out for crash isolation
+# try:
+#     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+#     print("[ENCLAVE] Cryptography imported")
+# except ImportError as e:
+#     print(f"[ERROR] Cryptography missing: {e}")
+#     AESGCM = None
+AESGCM = None
+
+# try:
+#     import boto3
+#     print("[ENCLAVE] Boto3 imported")
+# except ImportError as e:
+#     print(f"[ERROR] Boto3 import failed: {e}")
+#     boto3 = None
+
+# try:
+#     import aws_nsm_interface
+#     print("[ENCLAVE] AWS NSM Interface imported")
+# except ImportError as e:
+#     print(f"[ERROR] AWS NSM Interface import failed: {e}")
+#     aws_nsm_interface = None
 
 class KMSAttestationClient:
     def __init__(self, region='ap-southeast-1', proxy_port=8000):
