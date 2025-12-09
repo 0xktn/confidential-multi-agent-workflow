@@ -87,9 +87,22 @@ def run_server():
                     conn.close()
                     continue
                 
-                print(f"[ENCLAVE] Received {len(data)} bytes", flush=True)
-                conn.sendall(data) # ECHO BACK (For Safety Check)
+                # Careful decode
+                try:
+                    msg_str = data.decode('utf-8', errors='ignore')
+                except:
+                    msg_str = ""
+                
+                print(f"[ENCLAVE] Recv {len(data)} bytes", flush=True)
 
+                # HANDLER DISPATCH
+                if '"type": "ping"' in msg_str or '"type":"ping"' in msg_str:
+                    conn.sendall(b'{"status": "ok", "msg": "pong"}')
+                else:
+                    # Echo fallback for verify
+                    print(f"[ENCLAVE] Unknown/Echo: {msg_str[:20]}", flush=True)
+                    conn.sendall(data)
+            
             except Exception as e_req:
                 print(f"[ERROR] Request failed: {e_req}", flush=True)
             finally:
