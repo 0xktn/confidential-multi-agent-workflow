@@ -34,38 +34,57 @@ except ImportError as e:
     aws_nsm_interface = None
 
 class KMSAttestationClient:
-    def __init__(self):
-        self._nsm_fd = None
-        self.kms = None
-        
-        if aws_nsm_interface:
-            try:
-                self._nsm_fd = aws_nsm_interface.open_nsm_device()
-                print("[ENCLAVE] NSM Device Opened", flush=True)
-            except Exception as e:
-                print(f"[WARN] Failed to open NSM device: {e}", flush=True)
-
-        if boto3:
-            try:
-                self.kms = boto3.client('kms', region_name='ap-southeast-1')
-            except Exception as e:
-                 print(f"[WARN] Failed to create KMS client: {e}", flush=True)
+    """
+    KMS client using official AWS kmstool_enclave_cli for attestation.
+    This calls the kmstool binary which handles NSM attestation internally.
+    """
+    def __init__(self, region='ap-southeast-1', proxy_port=8000):
+        self.region = region
+        self.proxy_port = proxy_port
+        print(f"[ENCLAVE] KMS Client initialized (region={region}, proxy_port={proxy_port})", flush=True)
 
     def decrypt(self, encrypted_data_b64):
-        # Stub logic to allow flow validation even if NSM/KMS fails
-        if not self.kms:
-            print("[WARN] KMS not available, using dummy key for verification", flush=True)
-            return b'0'*32
+        """
+        Decrypt KMS ciphertext using kmstool_enclave_cli with attestation.
+        
+        Args:
+            encrypted_data_b64: Base64-encoded KMS ciphertext blob
             
+        Returns:
+            bytes: Decrypted plaintext (32 bytes for TSK)
+        """
         try:
-            ciphertext_blob = base64.b64decode(encrypted_data_b64)
-            # In real environment, this needs vsock proxy. 
-            # We catch the timeout/failure and fallback to dummy for POC stability.
-            response = self.kms.decrypt(CiphertextBlob=ciphertext_blob)
-            return response['Plaintext']
+            print("[ENCLAVE] Calling kmstool_enclave_cli for KMS decrypt...", flush=True)
+            
+            result = subprocess.run(
+                [
+                    '/usr/bin/kmstool_enclave_cli',
+                    'decrypt',
+                    '--region', self.region,
+                    '--proxy-port', str(self.proxy_port),
+                    '--ciphertext', encrypted_data_b64
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                raise RuntimeError(f"kmstool_enclave_cli failed (exit {result.returncode}): {error_msg}")
+            
+            # kmstool outputs base64-encoded plaintext
+            plaintext_b64 = result.stdout.strip()
+            plaintext = base64.b64decode(plaintext_b64)
+            
+            print(f"[ENCLAVE] KMS Decrypt successful via kmstool! Plaintext length: {len(plaintext)} bytes", flush=True)
+            return plaintext
+            
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("kmstool_enclave_cli timed out after 30s")
         except Exception as e:
-            print(f"[ERROR] KMS Decrypt Call Failed: {e}. Falling back to dummy.", flush=True)
-            return b'0'*32
+            print(f"[ERROR] KMS Decrypt via kmstool failed: {e}", flush=True)
+            raise
 
 class EncryptionService:
     def __init__(self, key: bytes):
