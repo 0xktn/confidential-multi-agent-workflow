@@ -1,6 +1,6 @@
-# Use pre-built kmstool from Docker Hub (public)
+# Use pre-built kmstool from GHCR
 # Built from AWS's official aws-nitro-enclaves-sdk-c v0.4.3 using Dockerfile.al2
-FROM 0xktn/confidential-multi-agent-workflow:kmstool-enclave AS kmstool-base
+FROM ghcr.io/0xktn/kmstool:v0.4.3 AS kmstool-base
 
 # Final stage: Add Python and our application
 FROM amazonlinux:2023
