@@ -19,12 +19,7 @@ RUN git clone https://github.com/json-c/json-c.git && \
 
 WORKDIR /tmp/sdk
 RUN git clone --recursive https://github.com/aws/aws-nitro-enclaves-sdk-c.git . && \
-    mkdir build && cd build && \
-    cmake3 .. -DNITRO_ENCLAVES_QS_LOG_LEVEL=3 && \
-    make && \
-    find /tmp/sdk -type f -name "libnsm.so" -exec cp {} /usr/lib64/libnsm.so \; && \
-    ls -lR /tmp/sdk/bin && \
-    cat /tmp/sdk/containers/Dockerfile.al2 && \
+    cat containers/Dockerfile.al2 && \
     exit 1
 
 # Binary is now at /usr/bin/kmstool_enclave_cli
