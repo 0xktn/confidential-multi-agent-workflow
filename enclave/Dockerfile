@@ -14,7 +14,8 @@ RUN git clone --recursive https://github.com/aws/aws-nitro-enclaves-sdk-c.git . 
     mkdir build && cd build && \
     cmake3 .. -DNITRO_ENCLAVES_QS_LOG_LEVEL=3 && \
     make && \
-    find /tmp/sdk -name kmstool_enclave_cli -exec cp {} /usr/bin/kmstool_enclave_cli \;
+    find /tmp/sdk -name "kmstool-enclave-cli" -exec cp {} /usr/bin/kmstool_enclave_cli \; && \
+    /usr/bin/kmstool_enclave_cli --help | grep "decrypt" || (echo "Binary is not the CLI!" && ls -R /tmp/sdk && exit 1)
 
 # Binary is now at /usr/bin/kmstool_enclave_cli
 # or bin/kmstool_enclave_cli
