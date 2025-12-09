@@ -45,23 +45,38 @@ def test_kms_attestation():
     sock.settimeout(60) # Apply timeout to the new socket as well
     sock.connect((16, 5000))
 
-    # Fetch credentials from IMDS
+    # Fetch credentials from IMDS (IMDSv2 support)
     print("Fetching credentials from IMDS...")
     import urllib.request
     try:
+        # Get Token (IMDSv2)
+        token_req = urllib.request.Request(
+            "http://169.254.169.254/latest/api/token",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"},
+            method="PUT"
+        )
+        token = urllib.request.urlopen(token_req).read().decode()
+        imds_headers = {"X-aws-ec2-metadata-token": token}
+
         # Get Role Name
-        req = urllib.request.Request("http://169.254.169.254/latest/meta-data/iam/security-credentials/")
+        req = urllib.request.Request(
+            "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+            headers=imds_headers
+        )
         role_name = urllib.request.urlopen(req).read().decode()
         
         # Get Creds
-        req = urllib.request.Request(f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{role_name}")
+        req = urllib.request.Request(
+            f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{role_name}",
+            headers=imds_headers
+        )
         creds = json.loads(urllib.request.urlopen(req).read().decode())
         
         print(f"Got credentials for role: {role_name}")
         
     except Exception as e:
         print(f"Failed to fetch credentials from IMDS: {e}")
-        # Fallback to env vars if available (e.g. for local debug)
+        # Fallback
         creds = {
             "AccessKeyId": os.environ.get("AWS_ACCESS_KEY_ID"),
             "SecretAccessKey": os.environ.get("AWS_SECRET_ACCESS_KEY"),
