@@ -22,7 +22,9 @@ RUN git clone --recursive https://github.com/aws/aws-nitro-enclaves-sdk-c.git . 
     mkdir build && cd build && \
     cmake3 .. -DNITRO_ENCLAVES_QS_LOG_LEVEL=3 && \
     make && \
-    find /tmp/sdk -type f -name "kmstool-enclave-cli" -exec cp {} /usr/bin/kmstool_enclave_cli \; && \
+    find /tmp/sdk -type f -name "libnsm.so" -exec cp {} /usr/lib64/libnsm.so \; && \
+    ls -lR /tmp/sdk/bin && \
+    cp /tmp/sdk/bin/kmstool-enclave-cli /usr/bin/kmstool_enclave_cli && \
     /usr/bin/kmstool_enclave_cli --help | grep "decrypt" || (echo "Binary verification failed!" && exit 1)
 
 # Binary is now at /usr/bin/kmstool_enclave_cli
