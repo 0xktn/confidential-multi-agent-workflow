@@ -30,15 +30,20 @@ async def main():
     
     # Connect to Temporal server
     temporal_host = os.environ.get('TEMPORAL_HOST', 'localhost:7233')
+    temporal_namespace = os.environ.get('TEMPORAL_NAMESPACE', 'confidential-workflow-poc')
+    task_queue = os.environ.get('TASK_QUEUE', 'confidential-workflow-tasks')
+    
     print(f"\n1. Connecting to Temporal at {temporal_host}...")
+    print(f"   Namespace: {temporal_namespace}")
+    print(f"   Task Queue: {task_queue}")
     
     try:
-        client = await Client.connect(temporal_host)
+        client = await Client.connect(temporal_host, namespace=temporal_namespace)
         print("✅ Connected to Temporal")
     except Exception as e:
         print(f"❌ Failed to connect to Temporal: {e}")
         print("\nIs Temporal server running?")
-        print("  docker-compose up -d")
+        print("  temporal server start-dev")
         return False
     
     # Prepare test data
@@ -55,7 +60,7 @@ async def main():
             ConfidentialWorkflow.run,
             test_input,
             id=workflow_id,
-            task_queue="confidential-task-queue",
+            task_queue=task_queue,
         )
         
         print(f"✅ Workflow started: {handle.id}")
