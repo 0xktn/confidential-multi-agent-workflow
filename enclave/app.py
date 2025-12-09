@@ -130,22 +130,47 @@ class EnclaveApp:
             msg_type = msg.get('type')
             if msg_type == 'configure':
                 print("[ENCLAVE] Handling Configure", flush=True)
-                # Try real decrypt, fallback to dummy is handled in client
-                tsk = self.kms_client.decrypt(msg.get('encrypted_tsk', ''))
+                encrypted_tsk = msg.get('encrypted_tsk', '')
+                print(f"[ENCLAVE] Encrypted TSK length: {len(encrypted_tsk)}", flush=True)
+                
+                # Decrypt TSK via kmstool
+                tsk = self.kms_client.decrypt(encrypted_tsk)
+                print(f"[ENCLAVE] TSK decrypted! Length: {len(tsk)} bytes, Type: {type(tsk)}", flush=True)
+                print(f"[ENCLAVE] TSK (hex): {tsk.hex() if isinstance(tsk, bytes) else tsk}", flush=True)
+                
+                # Initialize encryption service
                 self.cipher = EncryptionService(tsk)
                 self.configured = True
+                print("[ENCLAVE] Encryption service initialized", flush=True)
                 conn.sendall(json.dumps({'status': 'ok'}).encode())
                 
             elif msg_type == 'process':
                 print("[ENCLAVE] Handling Process", flush=True)
                 if not self.configured:
+                    print("[ENCLAVE] ERROR: Not configured", flush=True)
                     conn.sendall(json.dumps({'status': 'error', 'msg': 'not configured'}).encode())
                     return
                 
-                plain = self.cipher.decrypt(msg.get('payload'))
+                if not self.cipher:
+                    print("[ENCLAVE] ERROR: Cipher is None", flush=True)
+                    conn.sendall(json.dumps({'status': 'error', 'msg': 'cipher not initialized'}).encode())
+                    return
+                
+                payload = msg.get('payload')
+                if not payload:
+                    print("[ENCLAVE] ERROR: No payload in message", flush=True)
+                    conn.sendall(json.dumps({'status': 'error', 'msg': 'no payload'}).encode())
+                    return
+                
+                print(f"[ENCLAVE] Decrypting payload (length: {len(payload)})", flush=True)
+                plain = self.cipher.decrypt(payload)
+                print(f"[ENCLAVE] Decrypted: {plain}", flush=True)
+                
                 # Prove we did something
                 result = plain + " [ENCLAVE SIGNED]"
+                print(f"[ENCLAVE] Encrypting result: {result}", flush=True)
                 cipher_out = self.cipher.encrypt(result)
+                print(f"[ENCLAVE] Encrypted result length: {len(cipher_out)}", flush=True)
                 conn.sendall(json.dumps({'status': 'ok', 'result': cipher_out}).encode())
                 
         except Exception as e:
