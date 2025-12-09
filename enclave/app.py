@@ -103,12 +103,13 @@ def run_server():
                 data = conn.recv(8192)
                 if not data:
                     conn.close()
-                    continue
-                
-                if data.strip() == b'ping':
-                    print("[ENCLAVE] Ping detected (Exact)", flush=True)
+                    # LENGTH BASED DISPATCH
+                # Ping = 4 bytes (b'ping')
+                if len(data) == 4:
+                    print("[ENCLAVE] Ping detected (Length 4)", flush=True)
                     conn.sendall(b'pong')
                 else:
+                    print(f"[ENCLAVE] Unknown length {len(data)}", flush=True)
                     conn.sendall(data) # ECHO BACK
 
             except Exception as e_req:
