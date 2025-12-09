@@ -4,18 +4,26 @@
 FROM amazonlinux:2 AS kmstool-base
 RUN yum install -y yum-utils && \
     amazon-linux-extras enable aws-nitro-enclaves-cli && \
-    yumdownloader aws-nitro-enclaves-cli-devel && \
-    rpm -ivh --nodeps aws-nitro-enclaves-cli-devel*.rpm && \
-    yum install -y git cmake3 gcc make json-c-devel && \
+    yum install -y git cmake3 gcc make && \
     yum clean all
+
+# Build json-c from source (required by kmstool)
+WORKDIR /tmp
+RUN git clone https://github.com/json-c/json-c.git && \
+    cd json-c && \
+    git checkout json-c-0.16-20220414 && \
+    mkdir build && cd build && \
+    cmake3 .. && \
+    make && \
+    make install
 
 WORKDIR /tmp/sdk
 RUN git clone --recursive https://github.com/aws/aws-nitro-enclaves-sdk-c.git . && \
     mkdir build && cd build && \
     cmake3 .. -DNITRO_ENCLAVES_QS_LOG_LEVEL=3 && \
     make && \
-    find /tmp/sdk -name "kmstool-enclave-cli" -exec cp {} /usr/bin/kmstool_enclave_cli \; && \
-    /usr/bin/kmstool_enclave_cli --help | grep "decrypt" || (echo "Binary is not the CLI!" && ls -R /tmp/sdk && exit 1)
+    find /tmp/sdk -type f -name "kmstool-enclave-cli" -exec cp {} /usr/bin/kmstool_enclave_cli \; && \
+    /usr/bin/kmstool_enclave_cli --help | grep "decrypt" || (echo "Binary verification failed!" && exit 1)
 
 # Binary is now at /usr/bin/kmstool_enclave_cli
 # or bin/kmstool_enclave_cli
