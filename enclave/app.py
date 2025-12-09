@@ -1,14 +1,15 @@
 import socket
 import sys
 import os
-import json
+import base64
+# import json
 # import subprocess
 
 # Force line buffering
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
-print("[ENCLAVE] Functional JSON Server Starting...", flush=True)
+print("[ENCLAVE] Manual Parsing Server Starting...", flush=True)
 
 def run_server():
     # Bind to CID_ANY port 5000
@@ -29,17 +30,17 @@ def run_server():
                 try:
                     data = conn.recv(8192)
                     if data:
-                        try:
-                            msg = json.loads(data.decode())
-                            if msg.get('type') == 'ping':
-                                print("[ENCLAVE] Ping received", flush=True)
-                                conn.sendall(json.dumps({'status': 'ok', 'msg': 'pong'}).encode())
-                            else:
-                                print(f"[ENCLAVE] Unknown msg: {msg}", flush=True)
-                                conn.sendall(json.dumps({'status': 'error', 'msg': 'unknown'}).encode())
-                        except Exception as e:
-                            print(f"[ENCLAVE] JSON/Logic Error: {e}", flush=True)
-                            conn.sendall(f"Error: {e}".encode())
+                        # Manual Parsing
+                        data_str = data.decode()
+                        print(f"[ENCLAVE] Received: {data_str}", flush=True)
+                        
+                        if '"type": "ping"' in data_str or '"type":"ping"' in data_str:
+                             print("[ENCLAVE] Ping received (Manual)", flush=True)
+                             # Manual JSON response
+                             conn.sendall(b'{"status": "ok", "msg": "pong"}')
+                        else:
+                             print(f"[ENCLAVE] Unknown msg", flush=True)
+                             conn.sendall(b'{"status": "error", "msg": "unknown"}')
                     else:
                         print(f"[ENCLAVE] Empty payload", flush=True)
                 except Exception as e:
