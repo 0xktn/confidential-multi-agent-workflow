@@ -105,11 +105,9 @@ def run_server():
                     conn.close()
                     continue
                 
-                print(f"[ENCLAVE] Recv {len(data)} bytes", flush=True)
-
-                if b'ping' in data:
-                    print("[ENCLAVE] Ping detected", flush=True)
-                    conn.sendall(b'{"status": "ok", "msg": "pong"}')
+                if data.strip() == b'ping':
+                    print("[ENCLAVE] Ping detected (Exact)", flush=True)
+                    conn.sendall(b'pong')
                 else:
                     conn.sendall(data) # ECHO BACK
 
