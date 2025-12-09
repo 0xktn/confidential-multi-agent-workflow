@@ -1,6 +1,6 @@
-# Use our pre-built kmstool-enclave image from GHCR
-# Built from AWS's official aws-nitro-enclaves-sdk-c using Dockerfile.al2
-FROM ghcr.io/0xktn/confidential-multi-agent-workflow:kmstool-v0.4.3 AS kmstool-base
+# Use pre-built kmstool from GHCR
+# Built from AWS's official aws-nitro-enclaves-sdk-c v0.4.3 using Dockerfile.al2
+FROM ghcr.io/0xktn/kmstool:v0.4.3 AS kmstool-base
 
 # Final stage: Add Python and our application
 FROM amazonlinux:2023
