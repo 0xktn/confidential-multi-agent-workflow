@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
-print("[ENCLAVE] Manual Handler V2 (Functional) Starting...", flush=True)
+print("[ENCLAVE] Bytes-Native Handler Starting...", flush=True)
 
 # Global State
 CREDENTIALS = {
@@ -19,44 +19,63 @@ CREDENTIALS = {
 }
 ENCRYPTION_KEY = None # 32-byte TSK
 
-def kms_decrypt(ciphertext_b64):
-    print(f"[ENCLAVE] Decrypting blob len={len(ciphertext_b64)}", flush=True)
+def kms_decrypt_bytes(ciphertext_b64_bytes):
+    # Expects bytes input
+    print(f"[ENCLAVE] Decrypt (Bytes) len={len(ciphertext_b64_bytes)}", flush=True)
     try:
         cmd = [
             '/usr/bin/kmstool_enclave_cli', 'decrypt',
             '--region', 'ap-southeast-1',
             '--proxy-port', '8000',
-            '--ciphertext', ciphertext_b64
+            '--ciphertext', ciphertext_b64_bytes.decode('ascii') # Argument must be str for Popen args usually, but let's try strict ascii
         ]
-        if CREDENTIALS['ak']:
-            cmd.extend(['--aws-access-key-id', CREDENTIALS['ak']])
-        if CREDENTIALS['sk']:
-            cmd.extend(['--aws-secret-access-key', CREDENTIALS['sk']])
-        if CREDENTIALS['token']:
-            cmd.extend(['--aws-session-token', CREDENTIALS['token']])
         
+        # Args
+        if CREDENTIALS['ak']:
+            cmd.extend(['--aws-access-key-id', CREDENTIALS['ak'].decode('ascii')])
+        if CREDENTIALS['sk']:
+            cmd.extend(['--aws-secret-access-key', CREDENTIALS['sk'].decode('ascii')])
+        if CREDENTIALS['token']:
+            cmd.extend(['--aws-session-token', CREDENTIALS['token'].decode('ascii')])
+        
+        # capture_output=True returns bytes in stdout if text=False (default)
         result = subprocess.run(
-            cmd, capture_output=True, text=True, check=True
+            cmd, capture_output=True, check=True
         )
+        
         output = result.stdout.strip()
-        if "PLAINTEXT:" in output:
-            payload = output.split("PLAINTEXT:", 1)[1].strip()
+        # Parse PLAINTEXT: <base64> (In verification we saw "PLAINTEXT: ...")
+        # All bytes
+        marker = b"PLAINTEXT:"
+        if marker in output:
+            payload = output.split(marker, 1)[1].strip()
             return base64.b64decode(payload)
         return base64.b64decode(output)
+
     except Exception as e:
         print(f"[ERROR] KMS Decrypt failed: {e}", flush=True)
         return None
 
-def extract_val(msg_str, key):
-    # Rudimentary JSON parser for specific keys
-    if f'"{key}":' not in msg_str and f'"{key}":' not in msg_str: return None
+def extract_val_bytes(msg_bytes, key_bytes):
+    # Rudimentary JSON bytes parser
+    # key_bytes should be b'key'
+    # Look for b'"key":'
+    search_key = b'"' + key_bytes + b'":'
+    if search_key not in msg_bytes:
+        # try with space
+        search_key = b'"' + key_bytes + b'" :'
+        if search_key not in msg_bytes:
+            return None
+            
     try:
-        sub = msg_str.split(f'"{key}"')[1]
+        # Split by key
+        sub = msg_bytes.split(b'"' + key_bytes + b'"')[1]
         # skip until colon
-        sub = sub.split(':', 1)[1].strip()
-        # skip quote
-        if sub.startswith('"'):
-            val = sub.split('"', 2)[1]
+        sub = sub.split(b':', 1)[1].strip()
+        # check if string value
+        if sub.startswith(b'"'):
+            # extract string content
+            val = sub.split(b'"', 2)[1]
             return val
         return None
     except:
@@ -83,26 +102,79 @@ def run_server():
             try:
                 data = conn.recv(8192)
                 if not data:
-                    print("[ENCLAVE] Empty data", flush=True)
                     conn.close()
                     continue
                 
-                # Careful decode
-                try:
-                    msg_str = data.decode('utf-8', errors='ignore')
-                except:
-                    msg_str = ""
-                
                 print(f"[ENCLAVE] Recv {len(data)} bytes", flush=True)
 
-                # HANDLER DISPATCH
-                if '"type": "ping"' in msg_str or '"type":"ping"' in msg_str:
+                # BYTES DISPATCH
+                # We assume client sends JSON, so keys are quoted.
+                
+                if b'"type": "ping"' in data or b'"type":"ping"' in data:
                     conn.sendall(b'{"status": "ok", "msg": "pong"}')
+                
+                elif b'"type": "configure"' in data or b'"type":"configure"' in data:
+                    print("[ENCLAVE] Handling Configure", flush=True)
+                    ak = extract_val_bytes(data, b"access_key_id")
+                    sk = extract_val_bytes(data, b"secret_access_key")
+                    token = extract_val_bytes(data, b"session_token")
+                    enc_key = extract_val_bytes(data, b"encrypted_key")
+                    
+                    if ak and sk and token and enc_key:
+                        CREDENTIALS['ak'] = ak
+                        CREDENTIALS['sk'] = sk
+                        CREDENTIALS['token'] = token
+                        
+                        tsk = kms_decrypt_bytes(enc_key)
+                        if tsk and len(tsk) == 32:
+                            global ENCRYPTION_KEY
+                            ENCRYPTION_KEY = tsk
+                            print("[ENCLAVE] Configured", flush=True)
+                            conn.sendall(b'{"status": "ok", "msg": "configured"}')
+                        else:
+                            print("[ERROR] TSK Decrypt Fail", flush=True)
+                            conn.sendall(b'{"status": "error", "msg": "kms_fail"}')
+                    else:
+                        conn.sendall(b'{"status": "error", "msg": "missing_fields"}')
+
+                elif b'"type": "process"' in data or b'"type":"process"' in data:
+                    print("[ENCLAVE] Handling Process", flush=True)
+                    if not ENCRYPTION_KEY:
+                         conn.sendall(b'{"status": "error", "msg": "not_configured"}')
+                    else:
+                        enc_data_b64 = extract_val_bytes(data, b"encrypted_data")
+                        if enc_data_b64:
+                            try:
+                                blob = base64.b64decode(enc_data_b64)
+                                nonce = blob[:12]
+                                ciphertext = blob[12:]
+                                aesgcm = AESGCM(ENCRYPTION_KEY)
+                                plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+                                
+                                # Process Logic: Echo (Bytes)
+                                # "Processed: " + plaintext
+                                resp_text = b"Processed: " + plaintext 
+                                
+                                # Encrypt
+                                resp_nonce = os.urandom(12)
+                                resp_cipher = aesgcm.encrypt(resp_nonce, resp_text, None)
+                                resp_blob = base64.b64encode(resp_nonce + resp_cipher) # bytes result
+                                
+                                # Manual JSON Bytes Construct
+                                # {"status": "ok", "encrypted_data": "..."}
+                                resp_json = b'{"status": "ok", "encrypted_data": "' + resp_blob + b'"}'
+                                conn.sendall(resp_json)
+                                
+                            except Exception as e_proc:
+                                print(f"[ERROR] Process Fail: {e_proc}", flush=True)
+                                conn.sendall(b'{"status": "error", "msg": "process_fail"}')
+                        else:
+                            conn.sendall(b'{"status": "error", "msg": "missing_data"}')
+
                 else:
-                    # Echo fallback for verify
-                    print(f"[ENCLAVE] Unknown/Echo: {msg_str[:20]}", flush=True)
-                    conn.sendall(data)
-            
+                    print("[ENCLAVE] Unknown Type", flush=True)
+                    conn.sendall(b'{"status": "error", "msg": "unknown"}')
+
             except Exception as e_req:
                 print(f"[ERROR] Request failed: {e_req}", flush=True)
             finally:
