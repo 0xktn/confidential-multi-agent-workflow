@@ -30,5 +30,9 @@ echo "[ENCLAVE] App exited with code $EXIT_CODE" > /dev/console
 # Dump log to console for debugging
 cat /tmp/enclave.log > /dev/console
 
+# DEATH RATTLE: Send logs to Host (CID 3) Port 8000
+echo "[ENCLAVE] Sending logs to host..."
+cat /tmp/enclave.log | socat - VSOCK-CONNECT:3:8000
+
 # Drop into shell if it crashed, or exit
 exit $EXIT_CODE

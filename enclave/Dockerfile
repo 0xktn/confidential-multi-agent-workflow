@@ -14,7 +14,7 @@ COPY --from=kmstool-base /etc/pki/tls/certs /etc/pki/tls/certs
 
 # Install runtime dependencies (if any)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
+    ca-certificates socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
