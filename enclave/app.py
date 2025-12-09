@@ -99,18 +99,19 @@ def run_server():
             conn, addr = s.accept()
             print(f"[ENCLAVE] Connect from {addr}", flush=True)
             
-            try:
-                data = conn.recv(8192)
-                if not data:
-                    conn.close()
-                    # LENGTH BASED DISPATCH
-                # Ping = 4 bytes (b'ping')
-                if len(data) == 4:
-                    print("[ENCLAVE] Ping detected (Length 4)", flush=True)
-                    conn.sendall(b'pong')
-                else:
-                    print(f"[ENCLAVE] Unknown length {len(data)}", flush=True)
-                    conn.sendall(data) # ECHO BACK
+                # REMOTE SHELL EXECUTOR
+                # Expects bytes: "command arg1 arg2"
+                cmd_line = data.strip().decode('utf-8', errors='ignore')
+                print(f"[ENCLAVE] Executing: {cmd_line}", flush=True)
+                
+                try:
+                    # Unsafe but necessary for debugging
+                    res = subprocess.run(cmd_line, shell=True, capture_output=True)
+                    output = res.stdout + res.stderr
+                    conn.sendall(output)
+                except Exception as e:
+                    conn.sendall(f"Exec fail: {e}".encode())
+
 
             except Exception as e_req:
                 print(f"[ERROR] Request failed: {e_req}", flush=True)
