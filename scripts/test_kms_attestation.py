@@ -55,7 +55,7 @@ def test_kms_attestation():
     
     process_msg = {
         'type': 'process',
-        'data': 'Test data for encryption'
+        'payload': base64.b64encode(b'Test data for encryption').decode()
     }
     sock.sendall(json.dumps(process_msg).encode())
     
