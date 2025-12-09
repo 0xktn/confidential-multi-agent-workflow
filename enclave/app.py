@@ -149,6 +149,24 @@ class EncryptionService:
         plaintext = self.aesgcm.decrypt(nonce, ciphertext, None)
         return plaintext.decode('utf-8')
 
+import io
+
+class EnclaveLogger:
+    def __init__(self):
+        self.logs = io.StringIO()
+    
+    def log(self, message):
+        line = f"[ENCLAVE] {message}"
+        print(line, flush=True)
+        self.logs.write(line + "\n")
+        
+    def get_logs(self):
+        return self.logs.getvalue()
+
+logger = EnclaveLogger()
+
+# ... (KMSAttestationClient and EncryptionService use logger.log instead of print) ...
+
 class EnclaveApp:
     def __init__(self):
         self.kms_client = KMSAttestationClient()
@@ -156,7 +174,7 @@ class EnclaveApp:
         self.configured = False
 
     def handle_connection(self, conn, addr):
-        print(f"[ENCLAVE] Conn from {addr}", flush=True)
+        logger.log(f"Conn from {addr}")
         try:
             data = conn.recv(8192)
             if not data: return
@@ -164,14 +182,19 @@ class EnclaveApp:
             try:
                 msg = json.loads(data.decode('utf-8'))
             except:
-                print(f"[ERROR] Bad JSON", flush=True)
+                logger.log("ERROR: Bad JSON")
                 return
 
             msg_type = msg.get('type')
+            
+            if msg_type == 'get_logs':
+                conn.sendall(json.dumps({'status': 'ok', 'logs': logger.get_logs()}).encode())
+                return
+                
             if msg_type == 'configure':
-                print("[ENCLAVE] Handling Configure", flush=True)
+                logger.log("Handling Configure")
                 encrypted_tsk = msg.get('encrypted_tsk', '')
-                print(f"[ENCLAVE] Encrypted TSK length: {len(encrypted_tsk)}", flush=True)
+                logger.log(f"Encrypted TSK length: {len(encrypted_tsk)}")
                 
                 # Set AWS credentials if provided
                 aws_access_key_id = msg.get('aws_access_key_id')
@@ -185,53 +208,55 @@ class EnclaveApp:
                         aws_session_token
                     )
                 else:
-                    print("[ENCLAVE] WARNING: No AWS credentials provided", flush=True)
+                    logger.log("WARNING: No AWS credentials provided")
                 
                 # Decrypt TSK via kmstool
                 tsk = self.kms_client.decrypt(encrypted_tsk)
-                print(f"[ENCLAVE] TSK decrypted! Length: {len(tsk)} bytes, Type: {type(tsk)}", flush=True)
-                print(f"[ENCLAVE] TSK (hex): {tsk.hex() if isinstance(tsk, bytes) else tsk}", flush=True)
+                logger.log(f"TSK decrypted! Length: {len(tsk)} bytes, Type: {type(tsk)}")
+                logger.log(f"TSK (hex): {tsk.hex() if isinstance(tsk, bytes) else tsk}")
                 
                 # Initialize encryption service
                 self.cipher = EncryptionService(tsk)
                 self.configured = True
-                print("[ENCLAVE] Encryption service initialized", flush=True)
+                logger.log("Encryption service initialized")
                 conn.sendall(json.dumps({'status': 'ok'}).encode())
                 
             elif msg_type == 'process':
-                print("[ENCLAVE] Handling Process", flush=True)
+                logger.log("Handling Process")
                 if not self.configured:
-                    print("[ENCLAVE] ERROR: Not configured", flush=True)
+                    logger.log("ERROR: Not configured")
                     conn.sendall(json.dumps({'status': 'error', 'msg': 'not configured'}).encode())
                     return
                 
                 if not self.cipher:
-                    print("[ENCLAVE] ERROR: Cipher is None", flush=True)
+                    logger.log("ERROR: Cipher is None")
                     conn.sendall(json.dumps({'status': 'error', 'msg': 'cipher not initialized'}).encode())
                     return
                 
                 payload = msg.get('payload')
                 if not payload:
-                    print("[ENCLAVE] ERROR: No payload in message", flush=True)
+                    logger.log("ERROR: No payload in message")
                     conn.sendall(json.dumps({'status': 'error', 'msg': 'no payload'}).encode())
                     return
                 
-                print(f"[ENCLAVE] Decrypting payload (length: {len(payload)})", flush=True)
+                logger.log(f"Decrypting payload (length: {len(payload)})")
                 plain = self.cipher.decrypt(payload)
-                print(f"[ENCLAVE] Decrypted: {plain}", flush=True)
+                logger.log(f"Decrypted: {plain}")
                 
                 # Prove we did something
                 result = plain + " [ENCLAVE SIGNED]"
-                print(f"[ENCLAVE] Encrypting result: {result}", flush=True)
+                logger.log(f"Encrypting result: {result}")
                 cipher_out = self.cipher.encrypt(result)
-                print(f"[ENCLAVE] Encrypted result length: {len(cipher_out)}", flush=True)
+                logger.log(f"Encrypted result length: {len(cipher_out)}")
                 conn.sendall(json.dumps({'status': 'ok', 'result': cipher_out}).encode())
                 
         except Exception as e:
-            print(f"[ERROR] Handler: {e}", flush=True)
+            logger.log(f"ERROR Handler: {e}")
             import traceback
             traceback.print_exc()
-            conn.sendall(json.dumps({'status': 'error', 'exception': str(e), 'traceback': traceback.format_exc()}).encode())
+            tb = traceback.format_exc()
+            logger.log(f"Traceback: {tb}")
+            conn.sendall(json.dumps({'status': 'error', 'exception': str(e), 'traceback': tb}).encode())
         finally:
             conn.close()
 

@@ -71,6 +71,21 @@ def test_kms_attestation():
         print(f"   Status: {result.get('status')}")
         print(f"   Exception: {result.get('exception')}")
         print(f"   Message: {result.get('msg')}")
+        
+        # Fetch enclave logs
+        print("\n📥 Fetching enclave logs...")
+        try:
+            sock = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((16, 5000))
+            sock.sendall(json.dumps({'type': 'get_logs'}).encode())
+            log_response = json.loads(sock.recv(16384).decode())
+            print("\n=== ENCLAVE LOGS ===")
+            print(log_response.get('logs', 'No logs returned'))
+            print("====================")
+        except Exception as e:
+            print(f"Failed to fetch logs: {e}")
+            
         return False
 
 if __name__ == '__main__':
