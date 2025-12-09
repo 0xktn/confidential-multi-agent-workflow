@@ -47,7 +47,11 @@ class EnclaveLogger:
         # We rely on print() being redirected to the file by run.sh
         # But we can also explicitly write if needed.
         # Since run.sh does redirection, print is enough.
-        print(f"[ENCLAVE] {message}")
+        try:
+            print(f"[ENCLAVE] {message}")
+        except Exception:
+            # Failsafe: If stdout is broken, don't crash the logging system
+            pass
         
     def get_logs(self):
         try:
