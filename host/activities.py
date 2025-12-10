@@ -121,11 +121,16 @@ def retry_on_failure(max_retries=3, delay=1, backoff=2):
 
 @retry_on_failure(max_retries=3, delay=2)
 def configure_enclave():
-    """Send configuration to enclave on first use with retry logic"""
+    """Send configuration to enclave with retry logic
+    
+    FIX 4: Always call configure to ensure KMS decrypt is triggered
+    This guarantees CloudTrail logs every workflow's attestation
+    """
     global _enclave_configured
     
-    if _enclave_configured:
-        return
+    # FIX 4: Removed early return to force KMS decrypt on every workflow
+    # if _enclave_configured:
+    #     return
     
     logger.info("Configuring enclave with KMS settings...")
     

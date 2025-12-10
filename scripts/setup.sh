@@ -382,6 +382,15 @@ else
     log_step "Step 6: KMS Policy (Already Complete)"
 fi
 
+# Step 6.5: Deploy encrypted TSK to remote instance
+# FIX 3: Ensures TSK is available for workflow execution
+log_info "Deploying encrypted TSK to EC2..."
+if "$SCRIPT_DIR/deploy-tsk.sh"; then
+    log_info "TSK deployed successfully"
+else
+    log_warn "TSK deployment failed - workflows may fail"
+fi
+
 # Step 7: Run Enclave via SSM
 if ! state_check "enclave_running"; then
     log_step "Step 7: Starting Enclave via SSM"

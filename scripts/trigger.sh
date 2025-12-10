@@ -16,9 +16,33 @@ if [[ -z "$INSTANCE_ID" ]]; then
     exit 1
 fi
 
+usage() {
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  --status <wf_id|latest> Check status of a workflow"
+    echo "  --verify-cloudtrail     Run CloudTrail attestation verification on remote instance"
+    exit 1
+}
+
 # Parse arguments
+MODE="trigger"
+WORKFLOW_ID=""
+
 if [[ "$1" == "--status" ]]; then
-    if [[ "$2" == "latest" ]]; then
+    MODE="status"
+    WORKFLOW_ID="$2"
+    if [[ -z "$WORKFLOW_ID" ]]; then
+        usage
+    fi
+elif [[ "$1" == "--verify-cloudtrail" ]]; then
+    MODE="verify_cloudtrail"
+elif [[ -n "$1" ]]; then
+    usage
+fi
+
+if [[ "$MODE" == "status" ]]; then
+    if [[ "$WORKFLOW_ID" == "latest" ]]; then
         # Get the latest workflow ID from cache
         WORKFLOW_ID=$(state_get "last_workflow_id" 2>/dev/null || echo "")
         
@@ -69,6 +93,71 @@ if [[ "$1" == "--status" ]]; then
     echo ""
     echo "$RESULT"
     echo ""
+    exit 0
+fi
+
+if [[ "$MODE" == "verify_cloudtrail" ]]; then
+    log_info "Running CloudTrail verification on remote instance..."
+    
+    COMMANDS='[
+        "cd /home/ec2-user/confidential-multi-agent-workflow",
+        "PYTHONWARNINGS=ignore python3 tests/verify_cloudtrail.py"
+    ]'
+
+    COMMAND_ID=$(aws ssm send-command \
+        --region "$AWS_REGION" \
+        --instance-ids "$INSTANCE_ID" \
+        --document-name "AWS-RunShellScript" \
+        --parameters "commands=$COMMANDS" \
+        --output text \
+        --query "Command.CommandId")
+
+    log_info "Command sent: $COMMAND_ID"
+    log_info "Waiting for verification results..."
+    
+    sleep 5
+    
+    while true; do
+        STATUS=$(aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "Status" \
+            --output text 2>/dev/null || echo "Pending")
+            
+        if [[ "$STATUS" == "Success" ]]; then
+            AWS_PAGER="" aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query "StandardOutputContent" \
+                --output text
+            exit 0
+        elif [[ "$STATUS" == "Failed" ]]; then
+            AWS_PAGER="" aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query "StandardOutputContent" \
+                --output text
+            
+            # Print stderr only if there's output
+            ERR=$(AWS_PAGER="" aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query "StandardErrorContent" \
+                --output text)
+            
+            if [[ -n "$ERR" ]]; then
+                echo ""
+                echo "Detailed Errors:"
+                echo "$ERR"
+            fi
+            exit 1
+        fi
+        sleep 5
+    done
     exit 0
 fi
 

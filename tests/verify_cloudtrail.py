@@ -15,9 +15,11 @@ import sys
 # Expected PCR0 from current enclave build
 EXPECTED_PCR0 = "ff332b261c7e90783f1782aad362dd1c9f0cd75f95687f78816933145c62a78c18b8fbe644adadd116a2d4305b888994"
 
-def main():
+def main(debug_mode=False):
     print("=" * 70)
     print("CLOUDTRAIL KMS ATTESTATION VERIFICATION")
+    if debug_mode:
+        print("(DEBUG MODE ENABLED)")
     print("=" * 70)
     
     region = 'ap-southeast-1'
@@ -30,19 +32,23 @@ def main():
         print(f"❌ Failed to connect to CloudTrail: {e}")
         return False
     
-    # Query for KMS Decrypt events in the last hour
+    # FIX 5: Extended to 24 hours to catch events from enclave builds
     end_time = datetime.utcnow()
-    start_time = end_time - timedelta(hours=1)
+    start_time = end_time - timedelta(hours=24)
+    
+    # Get KMS key ID for filtering (optional)
+    kms_key_id = os.environ.get('KMS_KEY_ID', '')
     
     print(f"\n2. Querying KMS Decrypt events...")
     print(f"   Time range: {start_time.strftime('%Y-%m-%d %H:%M:%S')} to {end_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     
     try:
+        # First try to get events from EnclaveInstanceRole specifically
         response = cloudtrail.lookup_events(
             LookupAttributes=[
                 {
-                    'AttributeKey': 'EventName',
-                    'AttributeValue': 'Decrypt'
+                    'AttributeKey': 'Username',
+                    'AttributeValue': 'EnclaveInstanceRole'
                 }
             ],
             StartTime=start_time,
@@ -51,6 +57,23 @@ def main():
         )
         
         events = response.get('Events', [])
+        
+        # If no events from EnclaveInstanceRole, try generic Decrypt events
+        if len(events) == 0:
+            print(f"   No events from EnclaveInstanceRole, trying all Decrypt events...")
+            response = cloudtrail.lookup_events(
+                LookupAttributes=[
+                    {
+                        'AttributeKey': 'EventName',
+                        'AttributeValue': 'Decrypt'
+                    }
+                ],
+                StartTime=start_time,
+                EndTime=end_time,
+                MaxResults=50
+            )
+            events = response.get('Events', [])
+        
         print(f"✅ Found {len(events)} Decrypt events")
         
         if len(events) == 0:
@@ -78,6 +101,17 @@ def main():
         print(f"\n   Event {i}:")
         print(f"   Time: {event_time}")
         print(f"   User: {event_data.get('userIdentity', {}).get('principalId', 'Unknown')}")
+        
+        # Check for errors
+        if 'errorCode' in event_data:
+            print(f"   ❌ Error: {event_data['errorCode']} - {event_data.get('errorMessage', 'No message')}")
+        else:
+            print(f"   ✅ Success (HTTP 200)")
+        
+        
+        if debug_mode:
+            print(f"   [DEBUG] Full Event Data:")
+            print(json.dumps(event_data, indent=2))
         
         # Check for attestation document in request parameters
         request_params = event_data.get('requestParameters', {})
@@ -142,8 +176,9 @@ def main():
 
 
 if __name__ == '__main__':
+    debug_mode = '--debug' in sys.argv
     try:
-        success = main()
+        success = main(debug_mode)
         sys.exit(0 if success else 1)
     except Exception as e:
         print(f"\n❌ Verification failed: {e}")
