@@ -43,13 +43,17 @@ def main(debug_mode=False):
     print("======================================================================")
     
     region = 'ap-southeast-1'
-    print(f"\n1. Connecting to CloudTrail in {region}...")
+    region = 'ap-southeast-1'
+    if debug_mode:
+        print(f"\n1. Connecting to CloudTrail in {region}...")
     
     try:
         cloudtrail = boto3.client('cloudtrail', region_name=region)
-        print("✅ Connected to CloudTrail")
+        if debug_mode:
+            print("✅ Connected to CloudTrail")
     except Exception as e:
-        print(f"❌ Failed to connect to CloudTrail: {e}")
+        if debug_mode:
+            print(f"❌ Failed to connect to CloudTrail: {e}")
         return False
     
     # FIX 6: Reduce to 1 hour to avoid picking up stale/irrelevant events
@@ -59,8 +63,9 @@ def main(debug_mode=False):
     # Get KMS key ID for filtering (optional)
     kms_key_id = os.environ.get('KMS_KEY_ID', '')
     
-    print(f"\n2. Querying KMS Decrypt events...")
-    print(f"   Time range: {start_time.strftime('%Y-%m-%d %H:%M:%S')} to {end_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    if debug_mode:
+        print(f"\n2. Querying KMS Decrypt events...")
+        print(f"   Time range: {start_time.strftime('%Y-%m-%d %H:%M:%S')} to {end_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     
     try:
         # First try to get events from EnclaveInstanceRole specifically
@@ -79,13 +84,15 @@ def main(debug_mode=False):
         events = response.get('Events', [])
         
         events = response.get('Events', [])
-        print(f"✅ Found {len(events)} events matching criteria")
+        if debug_mode:
+            print(f"✅ Found {len(events)} events matching criteria")
         
         # Determine if we should attempt detailed analysis
         cloudtrail_success = (len(events) > 0)
         
     except Exception as e:
-        print(f"❌ Failed to query CloudTrail: {e}")
+        if debug_mode:
+            print(f"❌ Failed to query CloudTrail: {e}")
         cloudtrail_success = False
 
     # 3. Analyze events for attestation (if verify_cloudtrail.py found any)
