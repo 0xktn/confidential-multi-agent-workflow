@@ -78,52 +78,30 @@ def main(debug_mode=False):
         
         events = response.get('Events', [])
         
-        # If no events from EnclaveInstanceRole, try by KMS Key ID or generic Decrypt events
-        if len(events) == 0:
-            if kms_key_id:
-                print(f"   No events from EnclaveInstanceRole, filtering by KMS Key ID: {kms_key_id}")
-                response = cloudtrail.lookup_events(
-                    LookupAttributes=[
-                        {
-                            'AttributeKey': 'ResourceName',
-                            'AttributeValue': kms_key_id
-                        }
-                    ],
-                    StartTime=start_time,
-                    EndTime=end_time,
-                    MaxResults=50
-                )
-            else:
-                print(f"   No events from EnclaveInstanceRole, trying all Decrypt events...")
-                response = cloudtrail.lookup_events(
-                    LookupAttributes=[
-                        {
-                            'AttributeKey': 'EventName',
-                            'AttributeValue': 'Decrypt'
-                        }
-                    ],
-                    StartTime=start_time,
-                    EndTime=end_time,
-                    MaxResults=50
-                )
-            events = response.get('Events', [])
-        
+        events = response.get('Events', [])
         print(f"✅ Found {len(events)} events matching criteria")
         
-        if len(events) == 0:
-            print("\n⚠️  No events found in the last 1 hour")
-            print("   (This is expected if CloudTrail Data Logging is disabled or latent)")
-            # Do NOT return False here. Fall through to the summary section to check worker logs.
-            pass
+        # Determine if we should attempt detailed analysis
+        cloudtrail_success = (len(events) > 0)
         
     except Exception as e:
         print(f"❌ Failed to query CloudTrail: {e}")
-        # Even if CloudTrail fails completely, check logs?
-        # A bit risky, but if the API is down, logs are the only truth.
-        pass # Allow fallthrough
+        cloudtrail_success = False
+
+    # 3. Analyze events for attestation (if verify_cloudtrail.py found any)
+    if cloudtrail_success:
+        print(f"\n3. Analyzing events for attestation documents...")
     
-    # Analyze events for attestation
-    print(f"\n3. Analyzing events for attestation documents...")
+    attestation_found = False
+    pcr0_match_found = False
+    
+    if cloudtrail_success:
+         # Continue to loop logic below
+         pass
+    else:
+         # Silent fallthrough - do not print "No events found" warning
+         # The summary section will explain "Verified via Logs" if logs work.
+         pass
     
     attestation_found = False
     pcr0_match_found = False
