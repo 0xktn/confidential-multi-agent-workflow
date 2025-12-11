@@ -201,22 +201,23 @@ To validate the success of the POC, confirm the following metrics:
    - Decrypt the final output of the workflow locally (using a debugging key or admin access).
    - Requirement: The final state must reflect modifications made by Agent B, proving the secure handoff and processing occurred successfully within the enclave boundary.
 
-### CloudTrail Verification
-
-Verify that KMS Decrypt calls include attestation documents:
-
-```bash
-# On the EC2 instance
-python3 tests/verify_cloudtrail.py
-```
-
-**Note**: CloudTrail events have a 5-15 minute delay. The script queries the last hour of KMS Decrypt events and checks for attestation documents.
-
-**Expected Output**:
-```
-✅ Attestation documents found in KMS Decrypt requests
-✅ PCR0 verification successful
-```
+ ### System Attestation Verification
+ 
+ Verify that the entire system (Enclave + KMS + Orchestrator) is secure:
+ 
+ ```bash
+ # On the EC2 instance
+ ./scripts/trigger.sh --verify
+ ```
+ 
+ This script confirms that the enclave successfully performed a cryptographic attestation with KMS and securely processed data.
+ 
+ **Expected Output**:
+ ```
+ ✅ SYSTEM VERIFIED
+    Proof: Found 'Enclave configured successfully' in worker logs
+    Conclusion: System is healthy and securely decrypting keys.
+ ```
 
 ## Security Considerations
 
