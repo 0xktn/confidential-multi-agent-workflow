@@ -60,26 +60,40 @@ def main(debug_mode=False):
         
         events = response.get('Events', [])
         
-        # If no events from EnclaveInstanceRole, try generic Decrypt events
+        # If no events from EnclaveInstanceRole, try by KMS Key ID or generic Decrypt events
         if len(events) == 0:
-            print(f"   No events from EnclaveInstanceRole, trying all Decrypt events...")
-            response = cloudtrail.lookup_events(
-                LookupAttributes=[
-                    {
-                        'AttributeKey': 'EventName',
-                        'AttributeValue': 'Decrypt'
-                    }
-                ],
-                StartTime=start_time,
-                EndTime=end_time,
-                MaxResults=50
-            )
+            if kms_key_id:
+                print(f"   No events from EnclaveInstanceRole, filtering by KMS Key ID: {kms_key_id}")
+                response = cloudtrail.lookup_events(
+                    LookupAttributes=[
+                        {
+                            'AttributeKey': 'ResourceName',
+                            'AttributeValue': kms_key_id
+                        }
+                    ],
+                    StartTime=start_time,
+                    EndTime=end_time,
+                    MaxResults=50
+                )
+            else:
+                print(f"   No events from EnclaveInstanceRole, trying all Decrypt events...")
+                response = cloudtrail.lookup_events(
+                    LookupAttributes=[
+                        {
+                            'AttributeKey': 'EventName',
+                            'AttributeValue': 'Decrypt'
+                        }
+                    ],
+                    StartTime=start_time,
+                    EndTime=end_time,
+                    MaxResults=50
+                )
             events = response.get('Events', [])
         
-        print(f"✅ Found {len(events)} Decrypt events")
+        print(f"✅ Found {len(events)} events matching criteria")
         
         if len(events) == 0:
-            print("\n⚠️  No KMS Decrypt events found in the last hour")
+            print("\n⚠️  No events found in the last 24 hours")
             print("\nPossible reasons:")
             print("  • CloudTrail has 5-15 minute delay")
             print("  • Enclave hasn't decrypted TSK recently")
