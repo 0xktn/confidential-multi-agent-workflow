@@ -116,16 +116,11 @@ def main(debug_mode=False):
             print(json.dumps(event_data, indent=2))
         
         # Check for attestation document in request parameters
-        request_params = event_data.get('requestParameters', {})
-        
-        if 'recipient' in request_params:
-            recipient = request_params['recipient']
-            print(f"   ✅ Recipient field present")
-            
-            if 'attestationDocument' in recipient:
-                attestation_found = True
-                attestation_doc_b64 = recipient['attestationDocument']
-                print(f"   ✅ Attestation document present (length: {len(attestation_doc_b64)} bytes)")
+        if 'requestParameters' in event_data:
+            params = event_data['requestParameters']
+            if 'recipient' in params:
+                recipient = params['recipient']
+                print(f"   ✅ Recipient field present")
                 
                 # Try to decode and parse attestation document
                 try:
