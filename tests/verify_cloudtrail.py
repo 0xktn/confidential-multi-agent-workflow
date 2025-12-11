@@ -52,9 +52,9 @@ def main(debug_mode=False):
         print(f"❌ Failed to connect to CloudTrail: {e}")
         return False
     
-    # FIX 5: Extended to 24 hours to catch events from enclave builds
+    # FIX 6: Reduce to 1 hour to avoid picking up stale/irrelevant events
     end_time = datetime.utcnow()
-    start_time = end_time - timedelta(hours=24)
+    start_time = end_time - timedelta(minutes=60)
     
     # Get KMS key ID for filtering (optional)
     kms_key_id = os.environ.get('KMS_KEY_ID', '')
