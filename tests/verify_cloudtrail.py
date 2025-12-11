@@ -122,20 +122,41 @@ def main(debug_mode=False):
                 recipient = params['recipient']
                 print(f"   ✅ Recipient field present")
                 
-                # Try to decode and parse attestation document
-                try:
-                    # Attestation document is CBOR-encoded, we'll just check if PCR0 is in the base64
-                    # For a full parse, we'd need cbor2 library
-                    if EXPECTED_PCR0 in attestation_doc_b64:
-                        pcr0_match_found = True
-                        print(f"   ✅ PCR0 MATCH FOUND: {EXPECTED_PCR0[:32]}...")
-                    else:
-                        print(f"   ⚠️  PCR0 not found in attestation (may be CBOR-encoded)")
-                        
-                except Exception as e:
-                    print(f"   ⚠️  Could not parse attestation: {e}")
+                # DEBUG: Dump the keys in recipient to see what's actually there
+                if debug_mode:
+                    print(f"   [DEBUG] Recipient keys: {list(recipient.keys())}")
+                
+                # Check for various casing possibilities
+                doc_key = next((k for k in recipient.keys() if k.lower() == 'attestationdocument'), None)
+                
+                if doc_key:
+                    attestation_found = True
+                    attestation_doc_b64 = recipient[doc_key]
+                    print(f"   ✅ Attestation document present (key: {doc_key}, length: {len(str(attestation_doc_b64))} chars)")
+                    
+                    # Try to decode and parse attestation document
+                    try:
+                        # Attestation document is CBOR-encoded, we'll just check if PCR0 is in the base64
+                        # For a full parse, we'd need cbor2 library
+                        if EXPECTED_PCR0 in attestation_doc_b64:
+                            pcr0_match_found = True
+                            print(f"   ✅ PCR0 MATCH FOUND: {EXPECTED_PCR0[:32]}...")
+                        else:
+                            print(f"   ⚠️  PCR0 not found in attestation (may be CBOR-encoded)")
+                            
+                    except Exception as e:
+                        print(f"   ⚠️  Could not parse attestation: {e}")
+                else:
+                    print(f"   ⚠️  No attestation document found in recipient")
+                    # Dump full params for inspection
+                    if debug_mode:
+                        print(f"   [DEBUG] Full Request Parameters: {json.dumps(params, default=str)}")
             else:
-                print(f"   ⚠️  No attestation document in recipient")
+                 # Debug: If it's from our instance but has no recipient
+                 if debug_mode and 'i-0f4bd7e1a524b317d' in event_data.get('userIdentity', {}).get('principalId', ''): # Changed event.get to event_data.get
+                     print(f"   [DEBUG] Found event from instance but no 'recipient' field. Keys: {list(params.keys())}")
+                 else:
+                    print(f"   ⚠️  No attestation document in recipient")
         else:
             print(f"   ⚠️  No recipient field (not from enclave)")
     
