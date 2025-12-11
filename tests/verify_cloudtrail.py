@@ -8,6 +8,8 @@ include attestation documents with the correct PCR0 value.
 
 import boto3
 import json
+import pprint
+import os
 import base64
 from datetime import datetime, timedelta
 import sys
