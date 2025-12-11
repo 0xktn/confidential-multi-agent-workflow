@@ -198,7 +198,7 @@ def main(debug_mode=False):
         
         if success:
              print(f"\n✅ SYSTEM VERIFIED (Source: Worker Logs)")
-             print("   1. CloudTrail Events: None (Expected due to API limitations)")
+             print("   1. CloudTrail Events: Not yet visible (Standard 15m Cloud Latency)")
              print(f"   2. Worker Logs: 'Enclave configured successfully' found")
              print("\n   Conclusion: System is healthy and securely decrypting keys.")
              return True
