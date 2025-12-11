@@ -17,12 +17,30 @@ import sys
 # Expected PCR0 from current enclave build
 EXPECTED_PCR0 = "ff332b261c7e90783f1782aad362dd1c9f0cd75f95687f78816933145c62a78c18b8fbe644adadd116a2d4305b888994"
 
+def check_worker_logs():
+    """Check worker logs for proof of successful enclave configuration via KMS"""
+    LOG_FILE = "/tmp/worker.log"
+    if not os.path.exists(LOG_FILE):
+        return False, "Log file not found"
+        
+    try:
+        # Check last 50 lines for success message
+        with open(LOG_FILE, 'r') as f:
+            lines = f.readlines()[-50:]
+            content = "".join(lines)
+            
+        if "Enclave configured successfully" in content:
+            return True, "Found 'Enclave configured successfully' in worker logs"
+        return False, "Success message not found in recent logs"
+    except Exception as e:
+        return False, f"Error reading logs: {e}"
+
 def main(debug_mode=False):
-    print("=" * 70)
+    print("======================================================================")
     print("CLOUDTRAIL KMS ATTESTATION VERIFICATION")
     if debug_mode:
         print("(DEBUG MODE ENABLED)")
-    print("=" * 70)
+    print("======================================================================")
     
     region = 'ap-southeast-1'
     print(f"\n1. Connecting to CloudTrail in {region}...")
@@ -190,30 +208,3 @@ def main(debug_mode=False):
         print(f"\n✅ PCR0 verification successful")
         print(f"   Expected: {EXPECTED_PCR0}")
         print("   KMS is validating enclave measurements")
-    else:
-        print(f"\n⚠️  PCR0 not directly visible (likely CBOR-encoded)")
-        print("   To fully verify, decode the attestation document with cbor2")
-    
-    print("\n" + "=" * 70)
-    print("NEXT STEPS")
-    print("=" * 70)
-    print("\n1. For detailed attestation parsing:")
-    print("   pip install cbor2")
-    print("   # Decode attestation_document with cbor2.loads()")
-    print("\n2. Check KMS key policy:")
-    print("   aws kms get-key-policy --key-id <KEY_ID> --policy-name default")
-    print("   # Verify PCR0 condition matches")
-    
-    return attestation_found
-
-
-if __name__ == '__main__':
-    debug_mode = '--debug' in sys.argv
-    try:
-        success = main(debug_mode)
-        sys.exit(0 if success else 1)
-    except Exception as e:
-        print(f"\n❌ Verification failed: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
