@@ -1,7 +1,7 @@
-# Builder: Amazon Linux 2 (Official Enclave OS)
+# Builder: Amazon Linux 2
 FROM amazonlinux:2 AS builder
 
-# Install amazon-linux-extras and enable nitro-enclaves
+# Install build tools
 RUN amazon-linux-extras install aws-nitro-enclaves-cli -y && \
     yum install -y \
     git \
@@ -13,25 +13,32 @@ RUN amazon-linux-extras install aws-nitro-enclaves-cli -y && \
     openssl-devel \
     pkgconfig \
     yum-utils \
-    json-c-devel \
     && yum clean all
 
-# Build dependencies/tools if not present in AL2 default repos
-# AL2 cmake is often old (v2.8), we might need v3.
-# Checking if cmake3 is available
+# Install cmake3 (AL2 default cmake is too old)
 RUN yum install -y cmake3 && \
     ln -sf /usr/bin/cmake3 /usr/bin/cmake
 
 # Setup build environment
 ENV INSTALL_PATH=/usr/local
 ENV CMAKE_PREFIX_PATH=/usr:$INSTALL_PATH
-# Add /usr/lib64 to search path for FindLibrary
-ENV CMAKE_LIBRARY_PATH=/usr/lib64
+ENV PKG_CONFIG_PATH=$INSTALL_PATH/lib/pkgconfig:$PKG_CONFIG_PATH
 
-# Symlink json-c library if not found in standard path
-RUN ln -sf /usr/lib64/libjson-c.so /usr/lib/libjson-c.so || true
+# 1. Build json-c from source (0.15 is stable)
+# We disable Werror to avoid compilation issues on older GCC
+RUN git clone --depth 1 -b json-c-0.15-20200726 https://github.com/json-c/json-c.git && \
+    mkdir -p json-c/build && \
+    cd json-c/build && \
+    cmake3 .. \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DBUILD_TESTING=OFF \
+    && \
+    make install && \
+    cd ../.. && rm -rf json-c
 
-# Build ONLY the SDK-C Application (kmstool_enclave_cli)
+# 2. Build SDK-C Application
 RUN git clone --depth 1 -b v0.4.3 https://github.com/aws/aws-nitro-enclaves-sdk-c.git && \
     cmake3 -S aws-nitro-enclaves-sdk-c -B aws-nitro-enclaves-sdk-c/build -GNinja \
     -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
@@ -42,10 +49,10 @@ RUN git clone --depth 1 -b v0.4.3 https://github.com/aws/aws-nitro-enclaves-sdk-
     cmake3 --build aws-nitro-enclaves-sdk-c/build --target install && \
     rm -rf aws-nitro-enclaves-sdk-c
 
-# Final Stage: Amazon Linux 2
+# Final Stage
 FROM amazonlinux:2
 
-# Install runtime dependencies
+# Runtime dependencies
 RUN amazon-linux-extras install aws-nitro-enclaves-cli -y && \
     yum install -y \
     python3 \
