@@ -1,10 +1,13 @@
 # Use pre-built kmstool from GHCR
 # Built from AWS's official aws-nitro-enclaves-sdk-c v0.4.3# Helper image to extract kmstool and libnsm using official AWS packages
 # Helper image to build kmstool from source
-# Helper image to build kmstool from source
+# Helper image# Use pre-built kmstool from GHCR
 FROM ghcr.io/0xktn/kmstool:v0.4.3 AS kmstool-base
+RUN echo "DEBUG: Finding libnsm.so" && find / -name libnsm.so
+RUN echo "DEBUG: Finding kmstool" && find / -name kmstool*
+RUN echo "DEBUG: FORCE FAIL" && exit 1
 
-# Final stage: Add Python and our application
+# Production stage: Add Python and our application
 FROM python:3.11-slim
 
 WORKDIR /app
