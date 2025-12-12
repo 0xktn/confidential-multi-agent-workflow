@@ -195,8 +195,8 @@ To validate the success of the POC, confirm the following metrics:
    - Inspect the "Input" and "Result" payloads in the Event History.
    - Requirement: Data must appear as opaque binary/hex strings (ciphertext). No plaintext JSON should be visible.
 2. **Attestation Verification**:
-   - Query AWS CloudTrail logs for kms:Decrypt events.
-   - Requirement: The event context must include a valid attestationDocument field, confirming the key was released only after hardware verification.
+   - Run the system verification script (`./scripts/trigger.sh --verify`).
+   - Requirement: The script must report `✅ SYSTEM VERIFIED`, confirming cryptographic attestation succeeded during TSK decryption.
 3. **Integrity Verification**:
    - Decrypt the final output of the workflow locally (using a debugging key or admin access).
    - Requirement: The final state must reflect modifications made by Agent B, proving the secure handoff and processing occurred successfully within the enclave boundary.
