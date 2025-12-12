@@ -86,7 +86,7 @@ RUN git clone --depth 1 -b v0.7.13 https://github.com/awslabs/aws-c-auth.git && 
 RUN git clone --depth 1 -b v0.4.0 https://github.com/aws/aws-nitro-enclaves-nsm-api.git && \
     cd aws-nitro-enclaves-nsm-api && cargo build --release -p nsm-lib && \
     cp target/release/libnsm.so $INSTALL_PATH/lib/ && \
-    mkdir -p $INSTALL_PATH/include && cp nsm.h $INSTALL_PATH/include/ && \
+    mkdir -p $INSTALL_PATH/include && cp target/release/nsm.h $INSTALL_PATH/include/ && \
     cd .. && rm -rf aws-nitro-enclaves-nsm-api
 
 # 10. aws-nitro-enclaves-sdk-c
