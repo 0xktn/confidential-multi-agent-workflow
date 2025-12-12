@@ -1,6 +1,5 @@
 import json
 import os
-import nsm_util
 import socket
 import subprocess
 import base64
@@ -116,8 +115,16 @@ def run_server():
                         # (KMS only decrypts if PCR0 matches)
                         print("[ENCLAVE] Requesting decryption from KMS...", flush=True)
 
+                        print("[ENCLAVE] Requesting decryption from KMS...", flush=True)
+
                         # Generate fresh attestation document directly from NSM
-                        att_doc, att_err = nsm_util.get_attestation_doc_b64()
+                        try:
+                            import nsm_util
+                            att_doc, att_err = nsm_util.get_attestation_doc_b64()
+                        except Exception as e:
+                            att_doc = None
+                            att_err = f"Import/Init failed: {e}"
+
                         if att_doc:
                              print(f"[ENCLAVE] ✅ Generated fresh attestation document (len={len(att_doc)})", flush=True)
                         else:
