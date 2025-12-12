@@ -20,12 +20,10 @@ touch /tmp/enclave.log
   done
 ) &
 
-echo "[ENCLAVE] Starting Python app..." | tee -a /tmp/enclave.log > /dev/console
-
-# Activate venv and run app
+echo "[ENCLAVE] Starting Python app (Direct to Console)..." > /dev/console
 cd /app
 source venv/bin/activate
-python3 -u app.py >> /tmp/enclave.log 2>&1
+python3 -u app.py > /dev/console 2>&1
 EXIT_CODE=$?
 
 echo "[ENCLAVE] App exited with code $EXIT_CODE" | tee -a /tmp/enclave.log > /dev/console
