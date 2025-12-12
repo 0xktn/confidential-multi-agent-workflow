@@ -11,13 +11,14 @@ RUN yum install -y python3 python3-pip findutils && yum clean all
 COPY --from=builder /usr/lib64/libnsm.so /usr/lib64/libnsm.so
 COPY --from=builder /usr/bin/kmstool_enclave_cli /usr/bin/kmstool_enclave_cli
 
-# Copy application
-WORKDIR /app
-COPY app.py requirements.txt run.sh ./
+# Copy application to /app
+RUN mkdir -p /app
+COPY app.py requirements.txt run.sh /app/
 
 # Setup Python environment
-RUN python3 -m venv venv && \
+RUN cd /app && \
+    python3 -m venv venv && \
     ./venv/bin/pip install --no-cache-dir -r requirements.txt && \
     chmod +x run.sh
 
-CMD ["./run.sh"]
+CMD ["/app/run.sh"]
