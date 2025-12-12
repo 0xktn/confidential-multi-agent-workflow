@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     libjson-c-dev \
+    golang \
+    cargo \
     && rm -rf /var/lib/apt/lists/*
 
 # Setup build environment
@@ -72,8 +74,7 @@ RUN git clone --depth 1 -b v0.7.13 https://github.com/awslabs/aws-c-auth.git && 
     rm -rf aws-c-auth
 
 # 9. aws-nitro-enclaves-nsm-api
-RUN apt-get update && apt-get install -y cargo && rm -rf /var/lib/apt/lists/* && \
-    git clone --depth 1 -b v0.4.0 https://github.com/aws/aws-nitro-enclaves-nsm-api.git && \
+RUN git clone --depth 1 -b v0.4.0 https://github.com/aws/aws-nitro-enclaves-nsm-api.git && \
     cd aws-nitro-enclaves-nsm-api && cargo build --release --manifest-path Cargo.toml && \
     cp target/release/libnsm.so $INSTALL_PATH/lib/ && \
     mkdir -p $INSTALL_PATH/include && cp nsm.h $INSTALL_PATH/include/ && \
