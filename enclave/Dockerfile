@@ -23,56 +23,118 @@ ENV LD_LIBRARY_PATH=$INSTALL_PATH/lib:$INSTALL_PATH/lib64:$LD_LIBRARY_PATH
 
 # 1. aws-lc (requires Go)
 RUN git clone --depth 1 -b v1.19.0 https://github.com/aws/aws-lc.git && \
-    cmake -S aws-lc -B aws-lc/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON && \
+    cmake -S aws-lc -B aws-lc/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     go env -w GOPROXY=direct && \
     cmake --build aws-lc/build --target install && \
     rm -rf aws-lc
 
 # 2. s2n-tls
 RUN git clone --depth 1 -b v1.3.26 https://github.com/aws/s2n-tls.git && \
-    cmake -S s2n-tls -B s2n-tls/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON && \
+    cmake -S s2n-tls -B s2n-tls/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     cmake --build s2n-tls/build --target install && \
     rm -rf s2n-tls
 
 # 3. aws-c-common
 RUN git clone --depth 1 -b v0.9.12 https://github.com/awslabs/aws-c-common.git && \
-    cmake -S aws-c-common -B aws-c-common/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON && \
+    cmake -S aws-c-common -B aws-c-common/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     cmake --build aws-c-common/build --target install && \
     rm -rf aws-c-common
 
 # 4. aws-c-cal
 RUN git clone --depth 1 -b v0.6.11 https://github.com/awslabs/aws-c-cal.git && \
-    cmake -S aws-c-cal -B aws-c-cal/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON && \
+    cmake -S aws-c-cal -B aws-c-cal/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     cmake --build aws-c-cal/build --target install && \
     rm -rf aws-c-cal
 
 # 5. aws-c-io
 RUN git clone --depth 1 -b v0.13.1 https://github.com/awslabs/aws-c-io.git && \
-    cmake -S aws-c-io -B aws-c-io/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON && \
+    cmake -S aws-c-io -B aws-c-io/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     cmake --build aws-c-io/build --target install && \
     rm -rf aws-c-io
 
 # 6. aws-c-compression
 RUN git clone --depth 1 -b v0.2.16 https://github.com/awslabs/aws-c-compression.git && \
-    cmake -S aws-c-compression -B aws-c-compression/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON && \
+    cmake -S aws-c-compression -B aws-c-compression/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     cmake --build aws-c-compression/build --target install && \
     rm -rf aws-c-compression
 
 # 7. aws-c-http
 RUN git clone --depth 1 -b v0.8.0 https://github.com/awslabs/aws-c-http.git && \
-    cmake -S aws-c-http -B aws-c-http/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON && \
+    cmake -S aws-c-http -B aws-c-http/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     cmake --build aws-c-http/build --target install && \
     rm -rf aws-c-http
 
 # 8. aws-c-sdkutils (REQUIRED by aws-c-auth)
 RUN git clone --depth 1 -b v0.1.12 https://github.com/awslabs/aws-c-sdkutils.git && \
-    cmake -S aws-c-sdkutils -B aws-c-sdkutils/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON && \
+    cmake -S aws-c-sdkutils -B aws-c-sdkutils/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     cmake --build aws-c-sdkutils/build --target install && \
     rm -rf aws-c-sdkutils
 
 # 9. aws-c-auth
 RUN git clone --depth 1 -b v0.7.13 https://github.com/awslabs/aws-c-auth.git && \
-    cmake -S aws-c-auth -B aws-c-auth/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON && \
+    cmake -S aws-c-auth -B aws-c-auth/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_FLAGS="-w" \
+    && \
     cmake --build aws-c-auth/build --target install && \
     rm -rf aws-c-auth
 
