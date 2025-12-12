@@ -13,6 +13,7 @@ RUN amazon-linux-extras install aws-nitro-enclaves-cli -y && \
     openssl-devel \
     pkgconfig \
     yum-utils \
+    json-c-devel \
     && yum clean all
 
 # Build dependencies/tools if not present in AL2 default repos
