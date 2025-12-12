@@ -375,13 +375,6 @@ nitro-cli run-enclave \
   --cpu-count 2 \
   --memory 1024 \
   --eif-path enclave.eif
-
-# For debugging (allows console output)
-nitro-cli run-enclave \
-  --cpu-count 2 \
-  --memory 2048 \
-  --eif-path enclave.eif \
-  --debug-mode
 ```
 
 ## Troubleshooting
@@ -390,7 +383,7 @@ nitro-cli run-enclave \
 
 **Cause**: Application not running inside an enclave
 
-**Solution**: This is expected during development. Test with debug mode or mock the NSM.
+**Solution**: This is expected during development. Ensure the enclave has access to the NSM device or mock the response for local unit tests.
 
 ### Issue: `socket.error: Address family not supported`
 
@@ -406,4 +399,4 @@ nitro-cli run-enclave \
 
 ## Next Steps
 
-- [05-host-worker-setup.md](./05-host-worker-setup.md) - Set up the host worker application
+- [HOST_WORKER_SETUP.md](./HOST_WORKER_SETUP.md) - Set up the host worker application

@@ -480,7 +480,6 @@ python start_workflow.py
 ```bash
 # Get enclave CID
 nitro-cli describe-enclaves
-# Update ENCLAVE_CID in config
 ```
 
 ### Issue: `Activity timeout`
@@ -492,7 +491,7 @@ nitro-cli describe-enclaves
 ## Next Steps
 
 After completing all setup:
-1. Build and run the enclave (see [04-enclave-development.md](./04-enclave-development.md))
+1. Build and run the enclave (see [ENCLAVE_DEVELOPMENT.md](./ENCLAVE_DEVELOPMENT.md))
 2. Start the host worker
 3. Execute a test workflow
 4. Verify encrypted data in Temporal UI (see README Verification Procedure)
