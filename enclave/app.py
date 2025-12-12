@@ -41,7 +41,18 @@ def kms_decrypt(ciphertext_b64):
         )
         
         if result.stderr:
-            print(f"[ENCLAVE] KMS Tool Stderr (Trace):\n{result.stderr}", flush=True)
+            # Smart Filter: Find attestation document in the massive trace logs
+            # Look for context like "attestationDocument": "base64..." or hex dumps
+            import re
+            # Pattern to find 'attestationDocument': '...' or "..."
+            match = re.search(r'["\']attestationDocument["\']\s*:\s*["\']([^"\']+)["\']', result.stderr)
+            if match:
+                 att_doc = match.group(1)
+                 print(f"\n[ENCLAVE] ✅ DETECTED ATTESTATION DOCUMENT (Length: {len(att_doc)})", flush=True)
+                 print(f"[ENCLAVE] EVIDENCE:\n{att_doc}\n", flush=True)
+            else:
+                 # If we can't find it, print a snippet to help debug format
+                 print(f"[ENCLAVE] Trace Log (First 500 chars): {result.stderr[:500]}", flush=True)
 
         output = result.stdout.strip()
         # Parse PLAINTEXT: <base64>
