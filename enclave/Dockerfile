@@ -22,7 +22,8 @@ ENV CMAKE_PREFIX_PATH=$INSTALL_PATH
 ENV LD_LIBRARY_PATH=$INSTALL_PATH/lib:$INSTALL_PATH/lib64:$LD_LIBRARY_PATH
 ENV CFLAGS="-std=gnu99 -Wno-error -w"
 
-# Monolithic Build Step to save space (cleans up as it goes)
+# GROUP 1: Core Libraries (Base)
+# aws-lc, s2n-tls, aws-c-common, aws-c-cal
 RUN \
     # 1. aws-lc
     git clone --depth 1 -b v1.19.0 https://github.com/aws/aws-lc.git && \
@@ -44,7 +45,11 @@ RUN \
     git clone --depth 1 -b v0.6.11 https://github.com/awslabs/aws-c-cal.git && \
     cmake -S aws-c-cal -B aws-c-cal/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON -DAWS_WARNINGS_ARE_ERRORS=OFF -DCMAKE_C_FLAGS="-std=gnu99 -Wno-error -w" && \
     cmake --build aws-c-cal/build --target install && \
-    rm -rf aws-c-cal && \
+    rm -rf aws-c-cal
+
+# GROUP 2: I/O & Networking
+# aws-c-io, aws-c-compression, aws-c-http
+RUN \
     # 5. aws-c-io
     git clone --depth 1 -b v0.13.1 https://github.com/awslabs/aws-c-io.git && \
     cmake -S aws-c-io -B aws-c-io/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON -DAWS_WARNINGS_ARE_ERRORS=OFF -DCMAKE_C_FLAGS="-std=gnu99 -Wno-error -w" && \
@@ -59,7 +64,11 @@ RUN \
     git clone --depth 1 -b v0.8.0 https://github.com/awslabs/aws-c-http.git && \
     cmake -S aws-c-http -B aws-c-http/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON -DAWS_WARNINGS_ARE_ERRORS=OFF -DCMAKE_C_FLAGS="-std=gnu99 -Wno-error -w" && \
     cmake --build aws-c-http/build --target install && \
-    rm -rf aws-c-http && \
+    rm -rf aws-c-http
+
+# GROUP 3: Auth & SDK
+# aws-c-sdkutils, aws-c-auth, nsm, sdk
+RUN \
     # 8. aws-c-sdkutils
     git clone --depth 1 -b v0.1.12 https://github.com/awslabs/aws-c-sdkutils.git && \
     cmake -S aws-c-sdkutils -B aws-c-sdkutils/build -GNinja -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$INSTALL_PATH -DBUILD_SHARED_LIBS=ON -DAWS_WARNINGS_ARE_ERRORS=OFF -DCMAKE_C_FLAGS="-std=gnu99 -Wno-error -w" && \
