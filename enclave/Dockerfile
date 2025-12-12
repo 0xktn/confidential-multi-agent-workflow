@@ -1,29 +1,48 @@
-# Use pre-built kmstool image as base for artifacts
-FROM ghcr.io/0xktn/kmstool:v0.4.3 AS builder
+# Builder: Amazon Linux 2023 (Has pre-built Nitro libs)
+FROM amazonlinux:2023 AS builder
 
-# Final Stage: Run the Application
-FROM debian:bookworm-slim
+# Install build tools and pre-built Nitro libraries
+RUN dnf install -y \
+    git \
+    cmake \
+    ninja-build \
+    gcc \
+    gcc-c++ \
+    openssl-devel \
+    aws-nitro-enclaves-cli-devel \
+    && dnf clean all
 
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libjson-c5 \
+# Setup build environment
+ENV INSTALL_PATH=/usr/local
+ENV CMAKE_PREFIX_PATH=$INSTALL_PATH
+
+# Build ONLY the SDK-C Application (kmstool_enclave_cli)
+# We link against the system-installed AWS libraries (from aws-nitro-enclaves-cli-devel)
+RUN git clone --depth 1 -b v0.4.3 https://github.com/aws/aws-nitro-enclaves-sdk-c.git && \
+    cmake -S aws-nitro-enclaves-sdk-c -B aws-nitro-enclaves-sdk-c/build -GNinja \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    && \
+    cmake --build aws-nitro-enclaves-sdk-c/build --target install && \
+    rm -rf aws-nitro-enclaves-sdk-c
+
+# Final Stage: Amazon Linux 2023 (Runtime)
+FROM amazonlinux:2023
+
+# Install runtime dependencies (Python + Nitro CLI libs)
+RUN dnf install -y \
     python3 \
     python3-pip \
-    python3-venv \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    aws-nitro-enclaves-cli \
+    findutils \
+    && dnf clean all
 
-# Copy compiled artifacts from builder (pre-built image)
-COPY --from=builder /usr/local/bin /usr/bin/
-COPY --from=builder /usr/local/lib /usr/lib/
-COPY --from=builder /usr/local/include /usr/include/
+# Copy artifact
 COPY --from=builder /usr/local/bin/kmstool_enclave_cli /usr/bin/kmstool_enclave_cli
 
-# Ensure library path is set
-ENV LD_LIBRARY_PATH=/usr/lib
-
-# Copy application files
+# Environment
 WORKDIR /app
 COPY app.py requirements.txt run.sh ./
 
