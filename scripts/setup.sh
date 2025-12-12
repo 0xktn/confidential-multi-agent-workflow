@@ -264,27 +264,28 @@ if [[ -n "$INSTANCE_ID" ]]; then
         echo ""
         
         # Poll for IAM association status
-        log_info "Waiting for IAM profile association..."
-        ASSOC_OK=false
-        for i in {1..30}; do
-            STATE=$(aws ec2 describe-iam-instance-profile-associations \
-                --region "$AWS_REGION" \
-                --filters "Name=instance-id,Values=$INSTANCE_ID" \
-                --query 'IamInstanceProfileAssociations[0].State' \
-                --output text 2>/dev/null || echo "")
-            if [[ "$STATE" == "associated" ]]; then
-                echo ""
-                log_info "Profile associated!"
-                ASSOC_OK=true
-                break
-            fi
-            echo -n "."
-            sleep 2
-        done
-        echo ""
-        if [[ "$ASSOC_OK" != "true" ]]; then
-            log_warn "Association still pending, continuing anyway..."
-        fi
+         log_info "Waiting for IAM profile association (max 180s)..."
+         ASSOC_OK=false
+         for i in {1..90}; do
+             STATE=$(aws ec2 describe-iam-instance-profile-associations \
+                 --region "$AWS_REGION" \
+                 --filters "Name=instance-id,Values=$INSTANCE_ID" \
+                 --query 'IamInstanceProfileAssociations[0].State' \
+                 --output text 2>/dev/null || echo "")
+             if [[ "$STATE" == "associated" ]]; then
+                 echo ""
+                 log_info "Profile associated!"
+                 ASSOC_OK=true
+                 break
+             fi
+             echo -n "."
+             sleep 2
+         done
+         echo ""
+         if [[ "$ASSOC_OK" != "true" ]]; then
+             log_error "Association failed or timed out. SSM cannot start."
+             exit 1
+         fi
         
         # Restart SSM and poll for online status
         log_info "Restarting SSM agent..."
