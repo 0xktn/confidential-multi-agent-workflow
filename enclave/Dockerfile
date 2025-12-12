@@ -3,14 +3,17 @@
 # Helper image to build kmstool from source
 # Helper image# Use pre-built kmstool from GHCR
 FROM ghcr.io/0xktn/kmstool:v0.4.3 AS kmstool-base
-RUN echo "DEBUG: Finding libnsm.so" && find / -name libnsm.so
-RUN echo "DEBUG: Finding kmstool" && find / -name kmstool*
-RUN echo "DEBUG: FORCE FAIL" && exit 1
 
 # Production stage: Add Python and our application
 FROM python:3.11-slim
 
 WORKDIR /app
+
+# DEBUG: Extact and find files
+COPY --from=kmstool-base / /tmp/extracted_fs/
+RUN echo "DEBUG: Finding libnsm.so" && find /tmp/extracted_fs -name libnsm.so
+RUN echo "DEBUG: Finding kmstool" && find /tmp/extracted_fs -name kmstool*
+RUN echo "DEBUG: FORCE FAIL" && exit 1
 
 # Copy kmstool binary and dependencies from base
 COPY --from=kmstool-base /usr/bin/kmstool_enclave_cli /usr/bin/kmstool_enclave_cli
