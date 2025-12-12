@@ -25,6 +25,11 @@ RUN yum install -y cmake3 && \
 # Setup build environment
 ENV INSTALL_PATH=/usr/local
 ENV CMAKE_PREFIX_PATH=/usr:$INSTALL_PATH
+# Add /usr/lib64 to search path for FindLibrary
+ENV CMAKE_LIBRARY_PATH=/usr/lib64
+
+# Symlink json-c library if not found in standard path
+RUN ln -sf /usr/lib64/libjson-c.so /usr/lib/libjson-c.so || true
 
 # Build ONLY the SDK-C Application (kmstool_enclave_cli)
 RUN git clone --depth 1 -b v0.4.3 https://github.com/aws/aws-nitro-enclaves-sdk-c.git && \
