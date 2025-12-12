@@ -115,9 +115,7 @@ def run_server():
                         # (KMS only decrypts if PCR0 matches)
                         print("[ENCLAVE] Requesting decryption from KMS...", flush=True)
 
-                        # Attestation provided implicitly via KMS Decryption success
-                        # (KMS only decrypts if PCR0 matches)
-                        print("[ENCLAVE] Requesting decryption from KMS...", flush=True)
+
 
                         tsk_bytes, err_details = kms_decrypt(tsk_b64)
                         if tsk_bytes:
