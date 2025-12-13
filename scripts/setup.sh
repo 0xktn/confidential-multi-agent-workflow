@@ -394,7 +394,6 @@ else
 fi
 
 # Step 6.5: Deploy encrypted TSK to remote instance
-# FIX 3: Ensures TSK is available for workflow execution
 log_info "Deploying encrypted TSK to EC2..."
 if "$SCRIPT_DIR/deploy-tsk.sh"; then
     log_info "TSK deployed successfully"

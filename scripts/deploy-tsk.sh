@@ -1,6 +1,5 @@
 #!/bin/bash
 # Deploy encrypted TSK to remote EC2 instance
-# FIX 3: Ensures TSK is available on remote instance for workflow execution
 
 set -e
 
