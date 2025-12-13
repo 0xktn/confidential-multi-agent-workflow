@@ -30,7 +30,21 @@ echo "  Cleaning up ALL AWS resources"
 echo "========================================"
 echo ""
 
-# 1. Terminate EC2 instances with matching name
+# 1. Stop remote processes before terminating (if instance exists)
+INSTANCE_ID=$(state_get "instance_id" 2>/dev/null || echo "")
+if [[ -n "$INSTANCE_ID" ]]; then
+    log_info "Stopping remote processes on $INSTANCE_ID..."
+    aws ssm send-command \
+        --region "$AWS_REGION" \
+        --instance-ids "$INSTANCE_ID" \
+        --document-name "AWS-RunShellScript" \
+        --parameters 'commands=["nitro-cli terminate-enclave --all || true", "pkill vsock-proxy || true", "pkill -f host/worker.py || true", "docker compose -f /home/ec2-user/temporal-docker/docker-compose.yml down 2>/dev/null || true"]' \
+        2>/dev/null || true
+    sleep 5
+    log_info "Remote processes stopped"
+fi
+
+# 2. Terminate EC2 instances with matching name
 log_info "Finding EC2 instances named '$INSTANCE_NAME'..."
 INSTANCES=$(aws ec2 describe-instances \
     --region "$AWS_REGION" \
@@ -48,7 +62,7 @@ else
     log_info "No matching instances found"
 fi
 
-# 2. Delete IAM instance profile
+# 3. Delete IAM instance profile
 log_info "Deleting IAM instance profile..."
 aws iam remove-role-from-instance-profile \
     --instance-profile-name "$PROFILE_NAME" \
@@ -57,14 +71,14 @@ aws iam delete-instance-profile \
     --instance-profile-name "$PROFILE_NAME" 2>/dev/null || true
 log_info "Instance profile deleted"
 
-# 3. Delete IAM role and policies
+# 4. Delete IAM role and policies
 log_info "Deleting IAM role..."
 aws iam delete-role-policy --role-name "$ROLE_NAME" --policy-name KMSDecryptPolicy 2>/dev/null || true
 aws iam detach-role-policy --role-name "$ROLE_NAME" --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore 2>/dev/null || true
 aws iam delete-role --role-name "$ROLE_NAME" 2>/dev/null || true
 log_info "IAM role deleted"
 
-# 4. Delete KMS key
+# 5. Delete KMS key
 log_info "Deleting KMS key..."
 KMS_KEY_ID=$(state_get "kms_key_id" 2>/dev/null || echo "")
 KMS_ALIAS="alias/confidential-workflow-tsk"
@@ -83,7 +97,7 @@ else
     log_info "No KMS key found in state"
 fi
 
-# 5. Delete security group
+# 6. Delete security group
 log_info "Deleting security group..."
 SG_ID=$(aws ec2 describe-security-groups \
     --region "$AWS_REGION" \
