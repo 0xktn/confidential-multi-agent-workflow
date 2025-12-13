@@ -113,4 +113,31 @@ if __name__ == "__main__":
     else:
         content = arg
         
+    # Attempt to extract from log if it looks like a log
+    if " " in content or "PLAINTEXT" in content or "Attestation" in content:
+        # Try regex patterns
+        import re
+        patterns = [
+            r"PLAINTEXT:([A-Za-z0-9+/=]+)",
+            r"Attestation Document: ([A-Za-z0-9+/=]+)",
+            r"attestation_document: ([A-Za-z0-9+/=]+)",
+             r"([A-Za-z0-9+/=]{500,})" # Fallback: long base64 string
+        ]
+        
+        found = False
+        for p in patterns:
+            match = re.search(p, content)
+            if match:
+                print(f"✅ Found Base64 candidate in logs (matches pattern: {p})")
+                content = match.group(1).strip()
+                found = True
+                break
+        
+        if not found:
+            # If no pattern matched but it's long, maybe it is just the doc
+            if len(content) < 500:
+                print("❌ Input seems to be a log but no attestation document found.")
+                print("Patterns tried: 'PLAINTEXT:', 'Attestation Document:', or raw Base64 >500 chars")
+                sys.exit(1)
+        
     verify_attestation(content)
