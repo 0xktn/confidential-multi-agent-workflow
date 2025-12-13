@@ -30,6 +30,7 @@ fi
 log_info "Cloning repo and building enclave on EC2..."
 
 COMMANDS='[
+    "export HOME=/root",
     "cd /home/ec2-user",
     "rm -rf confidential-multi-agent-workflow",
     "git clone '"$REPO_URL"'",
@@ -37,7 +38,7 @@ COMMANDS='[
     "chmod +x scripts/*.sh",
     "export NITRO_CLI_ARTIFACTS=/home/ec2-user/confidential-multi-agent-workflow/build",
     "mkdir -p build",
-    "cd enclave && docker build -t confidential-enclave:latest . 2>&1",
+    "docker build -t confidential-enclave:latest -f enclave/Dockerfile . 2>&1",
     "nitro-cli build-enclave --docker-uri confidential-enclave:latest --output-file /home/ec2-user/confidential-multi-agent-workflow/build/enclave.eif 2>&1 | tee /tmp/enclave-build.log",
     "tail -n 500 /tmp/enclave-build.log"
 ]'

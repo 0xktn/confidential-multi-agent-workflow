@@ -27,19 +27,26 @@ fi
 
 log_info "Starting enclave on EC2..."
 
+# Read configuration from state
+ENCLAVE_MEM=$(state_get "enclave_memory_mb" 2>/dev/null || echo "2048")
+ENCLAVE_CPU=$(state_get "enclave_cpu_count" 2>/dev/null || echo "2")
+
+log_info "Enclave config: ${ENCLAVE_CPU} CPUs, ${ENCLAVE_MEM} MB memory"
+
 # Run enclave with correct path - includes vsock-proxy setup
 COMMANDS="[
-    \"cd /home/ec2-user/confidential-multi-agent-workflow\",
-    \"export NITRO_CLI_ARTIFACTS=/home/ec2-user/confidential-multi-agent-workflow/build\",
-    \"echo '[FIX1] Stopping existing vsock-proxy...'\",
-    \"pkill vsock-proxy || true\",
-    \"echo '[FIX1] Starting vsock-proxy for KMS...' \",
-    \"nohup vsock-proxy 8000 kms.ap-southeast-1.amazonaws.com 443 > /tmp/vsock-proxy.log 2>&1 &\",
-    \"sleep 2\",
-    \"pgrep vsock-proxy && echo '[FIX1] vsock-proxy running' || { echo '[ERROR] vsock-proxy failed'; exit 1; }\",
-    \"nitro-cli run-enclave --cpu-count 2 --memory 2048 --eif-path /home/ec2-user/confidential-multi-agent-workflow/build/enclave.eif --enclave-cid 16 2>&1 || echo ENCLAVE_FAILED\",
-    \"sleep 3\",
-    \"nitro-cli describe-enclaves\"
+    \\\"export HOME=/root\\\",
+    \\\"cd /home/ec2-user/confidential-multi-agent-workflow\\\",
+    \\\"export NITRO_CLI_ARTIFACTS=/home/ec2-user/confidential-multi-agent-workflow/build\\\",
+    \\\"echo '[FIX1] Stopping existing vsock-proxy...'\\\",
+    \\\"pkill vsock-proxy || true\\\",
+    \\\"echo '[FIX1] Starting vsock-proxy for KMS...' \\\",
+    \\\"nohup vsock-proxy 8000 kms.${AWS_REGION}.amazonaws.com 443 > /tmp/vsock-proxy.log 2>&1 &\\\",
+    \\\"sleep 2\\\",
+    \\\"pgrep vsock-proxy && echo '[FIX1] vsock-proxy running' || { echo '[ERROR] vsock-proxy failed'; exit 1; }\\\",
+    \\\"nitro-cli run-enclave --cpu-count ${ENCLAVE_CPU} --memory ${ENCLAVE_MEM} --eif-path /home/ec2-user/confidential-multi-agent-workflow/build/enclave.eif --enclave-cid 16 2>&1 || echo ENCLAVE_FAILED\\\",
+    \\\"sleep 3\\\",
+    \\\"nitro-cli describe-enclaves\\\"
 ]"
 
 COMMAND_ID=$(aws ssm send-command \
