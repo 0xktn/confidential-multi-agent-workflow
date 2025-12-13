@@ -43,19 +43,14 @@ def kms_decrypt(ciphertext_b64):
         )
         
         stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
-        
-        # Try to find attestation in stderr logs
-        # Pattern looks for base64 blocks or specific log lines
-        # This is best-effort. Return stderr for debugging.
-        attestation_debug_log = stderr[-50000:] # Last 50KB
         
         # Parse PLAINTEXT: <base64>
         marker = "PLAINTEXT:"
         if marker in stdout:
             payload = stdout.split(marker, 1)[1].strip()
-            return (base64.b64decode(payload), None, attestation_debug_log)
-        return (base64.b64decode(stdout), None, attestation_debug_log)
+            return (base64.b64decode(payload), None)
+        return (base64.b64decode(stdout), None)
+
 
     except subprocess.CalledProcessError as e:
         err_msg = e.stderr.strip()
@@ -123,21 +118,18 @@ def run_server():
                         # (KMS only decrypts if PCR0 matches)
                         print("[ENCLAVE] Requesting decryption from KMS...", flush=True)
 
-                        tsk_bytes, err_details, debug_logs = kms_decrypt(tsk_b64)
+                        tsk_bytes, err_details = kms_decrypt(tsk_b64)
                         if tsk_bytes:
                             ENCRYPTION_KEY = tsk_bytes
                             print(f"[ENCLAVE] ✅ TSK decrypted successfully! (len={len(ENCRYPTION_KEY)})", flush=True)
                             print(f"[ENCLAVE] ✅ Enclave configured at {datetime.utcnow().isoformat()}", flush=True)
                             
-                            # For audit, we cannot generate explicit doc without NSM library (which failed build).
-                            # We return the KMS tool logs, which might contain useful trace info.
                             response = {
                                 "status": "ok", 
                                 "msg": "configured", 
                                 "timestamp": datetime.utcnow().isoformat(),
                                 "attestation_document": None,
-                                "attestation_error": "NSM library build failed - Attestation doc not available. See logs.",
-                                "kms_tool_logs": debug_logs
+                                "attestation_error": "NSM library build failed - Attestation doc not available. See logs."
                             }
                         else:
                             print(f"[ENCLAVE] ❌ KMS decrypt failed: {err_details}", flush=True)
