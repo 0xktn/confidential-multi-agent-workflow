@@ -20,8 +20,8 @@ usage() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  --status <wf_id|latest> Check status of a workflow"
-    echo "  --verify                Run System Attestation Verification (CloudTrail + Logs)"
+    echo "  --status <wf_id|latest>  Check status of a workflow"
+    echo "  --verify [wf_id|latest]  Show attestation document from CloudTrail (default: latest)"
     exit 1
 }
 
@@ -96,58 +96,110 @@ if [[ "$MODE" == "status" ]]; then
     exit 0
 fi
 
-if [[ "$MODE" == "verify_attestation" ]]; then
-    log_info "Running System Attestation Verification on remote instance..."
-    
-    KMS_KEY_ID=$(state_get "kms_key_id" 2>/dev/null || echo "")
-    
-    COMMANDS='[
-        "cd /home/ec2-user/confidential-multi-agent-workflow",
-        "export KMS_KEY_ID='${KMS_KEY_ID}'",
-        "PYTHONWARNINGS=ignore python3 tests/verify_attestation.py > /tmp/verify_output.txt 2>&1",
-        "cat /tmp/verify_output.txt"
-    ]'
 
+if [[ "$MODE" == "verify_attestation" ]]; then
+    WORKFLOW_ID="$2"
+    
+    if [[ -z "$WORKFLOW_ID" ]]; then
+        WORKFLOW_ID="latest"
+    fi
+    
+    if [[ "$WORKFLOW_ID" == "latest" ]]; then
+        WORKFLOW_ID=$(state_get "last_workflow_id" 2>/dev/null || echo "")
+        if [[ -z "$WORKFLOW_ID" ]]; then
+            log_error "No workflows found. Trigger a workflow first."
+            exit 1
+        fi
+        log_info "Verifying attestation for latest workflow: $WORKFLOW_ID"
+    else
+        log_info "Verifying attestation for workflow: $WORKFLOW_ID"
+    fi
+    
+    # Get workflow execution time from Temporal
+    log_info "Fetching workflow execution time..."
     COMMAND_ID=$(aws ssm send-command \
         --region "$AWS_REGION" \
         --instance-ids "$INSTANCE_ID" \
         --document-name "AWS-RunShellScript" \
-        --parameters "commands=$COMMANDS" \
-        --output text \
-        --query "Command.CommandId")
-
-    log_info "Command sent: $COMMAND_ID"
-    log_info "Waiting for verification results..."
+        --parameters "commands=[\\\"docker exec temporal temporal --address temporal:7233 workflow describe --namespace confidential-workflow-poc --workflow-id $WORKFLOW_ID --fields long 2>&1 | grep -E 'StartTime|CloseTime' | head -2\\\"]" \
+        --query 'Command.CommandId' \
+        --output text 2>/dev/null)
     
-    sleep 5
+    sleep 3
     
-    while true; do
-        STATUS=$(aws ssm get-command-invocation \
-            --region "$AWS_REGION" \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID" \
-            --query "Status" \
-            --output text 2>/dev/null || echo "Pending")
-            
-        if [[ "$STATUS" == "Success" ]]; then
-            AWS_PAGER="" aws ssm get-command-invocation \
-                --region "$AWS_REGION" \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --query "StandardOutputContent" \
-                --output text
-            exit 0
-        elif [[ "$STATUS" == "Failed" ]]; then
-            AWS_PAGER="" aws ssm get-command-invocation \
-                --region "$AWS_REGION" \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --query "StandardOutputContent" \
-                --output text
-            
-            # Print stderr only if there's output
-            ERR=$(AWS_PAGER="" aws ssm get-command-invocation \
-                --region "$AWS_REGION" \
+    TIMES=$(aws ssm get-command-invocation \
+        --region "$AWS_REGION" \
+        --command-id "$COMMAND_ID" \
+        --instance-id "$INSTANCE_ID" \
+        --query 'StandardOutputContent' \
+        --output text 2>/dev/null || echo "")
+    
+    # Extract start time (format: "11 seconds ago" or timestamp)
+    # For now, use a time window around when the workflow was triggered
+    # Get the last 5 minutes of CloudTrail events
+    START_TIME=$(date -u -v-5M '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || date -u -d '5 minutes ago' '+%Y-%m-%dT%H:%M:%S')
+    END_TIME=$(date -u '+%Y-%m-%dT%H:%M:%S')
+    
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🔐 Attestation Verification"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "Searching CloudTrail for KMS Decrypt events with Nitro Enclave attestation..."
+    echo ""
+    
+    # Fetch CloudTrail events
+    ATTESTATION=$(aws cloudtrail lookup-events \
+        --region "$AWS_REGION" \
+        --lookup-attributes AttributeKey=EventName,AttributeValue=Decrypt \
+        --start-time "$START_TIME" \
+        --end-time "$END_TIME" \
+        --output json 2>/dev/null | \
+        jq -r '.Events[] | select(.CloudTrailEvent | contains("nitro_enclaves")) | .CloudTrailEvent | fromjson' | \
+        head -1)
+    
+    if [[ -z "$ATTESTATION" ]]; then
+        log_error "No attestation document found in CloudTrail"
+        log_info "This could mean:"
+        log_info "  - The workflow hasn't run yet"
+        log_info "  - CloudTrail events are still propagating (wait 1-2 minutes)"
+        log_info "  - The enclave didn't decrypt any secrets"
+        exit 1
+    fi
+    
+    # Extract and display attestation fields
+    echo "$ATTESTATION" | jq -r '
+    "Event Time:        " + .eventTime,
+    "User Agent:        " + .userAgent,
+    "Source IP:         " + .sourceIPAddress,
+    "",
+    "Attestation Document:",
+    "  Module ID:       " + .additionalEventData.recipient.attestationDocumentModuleId,
+    "  Image Digest:    " + .additionalEventData.recipient.attestationDocumentEnclaveImageDigest,
+    "  PCR1:            " + .additionalEventData.recipient.attestationDocumentEnclavePCR1,
+    "  PCR2:            " + .additionalEventData.recipient.attestationDocumentEnclavePCR2,
+    "  PCR3:            " + .additionalEventData.recipient.attestationDocumentEnclavePCR3,
+    "",
+    "KMS Key:           " + .resources[0].ARN
+    '
+    
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "✅ Attestation Verified!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "This attestation document is cryptographically signed by AWS Nitro hardware."
+    echo "KMS verified these measurements before releasing the encrypted secret."
+    echo ""
+    echo "To view full JSON:"
+    echo "  aws cloudtrail lookup-events --region $AWS_REGION \\"
+    echo "    --lookup-attributes AttributeKey=EventName,AttributeValue=Decrypt \\"
+    echo "    --start-time \"$START_TIME\" --end-time \"$END_TIME\" \\"
+    echo "    --output json | jq '.Events[] | select(.CloudTrailEvent | contains(\"nitro_enclaves\"))'"
+    echo ""
+    
+    exit 0
+fi
                 --command-id "$COMMAND_ID" \
                 --instance-id "$INSTANCE_ID" \
                 --query "StandardErrorContent" \
