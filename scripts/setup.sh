@@ -144,6 +144,16 @@ state_set "volume_size" "$VOLUME_SIZE"
 export AWS_REGION INSTANCE_TYPE KEY_NAME VOLUME_SIZE
 export STATE_DIR STATE_DB
 
+# Pre-flight validation
+ENCLAVE_MEM=$(state_get "enclave_memory_mb" 2>/dev/null || echo "2048")
+ENCLAVE_CPU=$(state_get "enclave_cpu_count" 2>/dev/null || echo "2")
+ALLOCATOR_MEM=2048  # Default allocator memory in run-instance-setup.sh
+
+if [[ $ENCLAVE_MEM -gt $ALLOCATOR_MEM ]]; then
+    log_warn "Enclave memory ($ENCLAVE_MEM MB) exceeds allocator ($ALLOCATOR_MEM MB)"
+    log_warn "Reduce enclave_memory_mb or update /etc/nitro_enclaves/allocator.yaml"
+fi
+
 # Display status
 echo ""
 echo "┌─────────────────────────────────────────────┐"
