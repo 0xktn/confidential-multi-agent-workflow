@@ -99,6 +99,15 @@ fi
 
 if [[ "$MODE" == "verify_attestation" ]]; then
     WORKFLOW_ID="$2"
+    SHOW_FULL_JSON=false
+    
+    # Handle optional arguments
+    if [[ "$WORKFLOW_ID" == "--full" ]]; then
+        WORKFLOW_ID="latest"
+        SHOW_FULL_JSON=true
+    elif [[ "$3" == "--full" ]]; then
+        SHOW_FULL_JSON=true
+    fi
     
     if [[ -z "$WORKFLOW_ID" ]]; then
         WORKFLOW_ID="latest"
@@ -115,6 +124,10 @@ if [[ "$MODE" == "verify_attestation" ]]; then
         log_info "Verifying attestation for workflow: $WORKFLOW_ID"
     fi
     
+    if [[ "$SHOW_FULL_JSON" == "true" ]]; then
+        log_info "Full JSON output enabled"
+    fi
+
     # Use a 10-minute time window for CloudTrail search
     # CloudTrail events can take 1-2 minutes to appear
     if date -v-10M > /dev/null 2>&1; then
@@ -204,12 +217,16 @@ if [[ "$MODE" == "verify_attestation" ]]; then
     echo "This attestation document is cryptographically signed by AWS Nitro hardware."
     echo "KMS verified these measurements before releasing the encrypted secret."
     echo ""
-    echo "To view full JSON:"
-    echo "  aws cloudtrail lookup-events --region $AWS_REGION \\"
-    echo "    --lookup-attributes AttributeKey=EventName,AttributeValue=Decrypt \\"
-    echo "    --start-time \"$START_TIME\" --end-time \"$END_TIME\" \\"
-    echo "    --output json | jq '.Events[] | select(.CloudTrailEvent | contains(\"nitro_enclaves\"))'"
-    echo ""
+    
+    if [[ "$SHOW_FULL_JSON" == "true" ]]; then
+        echo "📝 Full CloudTrail Event JSON:"
+        echo "$ATTESTATION" | jq .
+        echo ""
+    else
+        echo "To view full JSON:"
+        echo "  $0 --verify $WORKFLOW_ID --full"
+        echo ""
+    fi
     
     exit 0
 fi
