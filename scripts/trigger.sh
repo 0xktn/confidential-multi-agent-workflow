@@ -141,7 +141,7 @@ if [[ "$MODE" == "verify_attestation" ]]; then
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🔐 Attestation Verification"
+    echo "Attestation Verification"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     log_info "Searching CloudTrail for KMS Decrypt events with Nitro Enclave attestation..."
@@ -167,7 +167,7 @@ if [[ "$MODE" == "verify_attestation" ]]; then
         
         if [[ -n "$ATTESTATION" ]]; then
             echo ""
-            log_info "✅ Attestation document found!"
+            log_info "Attestation document found!"
             break
         fi
         
@@ -211,7 +211,7 @@ if [[ "$MODE" == "verify_attestation" ]]; then
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "✅ Attestation Verified!"
+    echo "Attestation Verified!"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "This attestation document is cryptographically signed by AWS Nitro hardware."
@@ -219,7 +219,7 @@ if [[ "$MODE" == "verify_attestation" ]]; then
     echo ""
     
     if [[ "$SHOW_FULL_JSON" == "true" ]]; then
-        echo "📝 Full CloudTrail Event JSON:"
+        echo "Full CloudTrail Event JSON:"
         echo "$ATTESTATION" | jq .
         echo ""
     else
