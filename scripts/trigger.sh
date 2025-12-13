@@ -200,22 +200,6 @@ if [[ "$MODE" == "verify_attestation" ]]; then
     
     exit 0
 fi
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --query "StandardErrorContent" \
-                --output text)
-            
-            if [[ -n "$ERR" ]]; then
-                echo ""
-                echo "Detailed Errors:"
-                echo "$ERR"
-            fi
-            exit 1
-        fi
-        sleep 5
-    done
-    exit 0
-fi
 
 # Trigger new workflow
 log_info "Triggering workflow on EC2 instance: $INSTANCE_ID"
