@@ -136,8 +136,14 @@ if [[ "$MODE" == "verify_attestation" ]]; then
     
     # Extract start time (format: "11 seconds ago" or timestamp)
     # For now, use a time window around when the workflow was triggered
-    # Get the last 5 minutes of CloudTrail events
-    START_TIME=$(date -u -v-5M '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || date -u -d '5 minutes ago' '+%Y-%m-%dT%H:%M:%S')
+    # Get the last 10 minutes of CloudTrail events
+    if date -v-10M > /dev/null 2>&1; then
+        # macOS
+        START_TIME=$(date -u -v-10M '+%Y-%m-%dT%H:%M:%S')
+    else
+        # Linux
+        START_TIME=$(date -u -d '10 minutes ago' '+%Y-%m-%dT%H:%M:%S')
+    fi
     END_TIME=$(date -u '+%Y-%m-%dT%H:%M:%S')
     
     echo ""
