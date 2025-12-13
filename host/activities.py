@@ -8,7 +8,7 @@ import socket
 import os
 import json
 import os
-import timetime
+import time
 from datetime import datetime
 from temporalio import activity
 import logging
