@@ -48,7 +48,7 @@ def kms_decrypt(ciphertext_b64):
         # Try to find attestation in stderr logs
         # Pattern looks for base64 blocks or specific log lines
         # This is best-effort. Return stderr for debugging.
-        attestation_debug_log = stderr[-2000:] # Last 2KB
+        attestation_debug_log = stderr[-50000:] # Last 50KB
         
         # Parse PLAINTEXT: <base64>
         marker = "PLAINTEXT:"
