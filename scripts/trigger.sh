@@ -149,7 +149,7 @@ if [[ "$MODE" == "verify_attestation" ]]; then
             --start-time "$START_TIME" \
             --end-time "$END_TIME" \
             --output json 2>/dev/null | \
-            jq -r '.Events[] | select(.CloudTrailEvent | contains("nitro_enclaves")) | .CloudTrailEvent | fromjson' | \
+            jq -r -c '.Events[] | select(.CloudTrailEvent | contains("nitro_enclaves")) | .CloudTrailEvent | fromjson' | \
             head -1)
         
         if [[ -n "$ATTESTATION" ]]; then
